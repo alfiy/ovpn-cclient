@@ -12,12 +12,15 @@
 #include <errno.h>
 #include <uuid/uuid.h>
 #include <regex.h>
+#include <stdarg.h>
+#include <time.h>
 
 #define APP_ID "com.example.ovpn-client"
 #define LOG_FILE "/tmp/ovpn_importer.log"
 #define MAX_CONNECTIONS 50
 #define MAX_PATH 1024
 #define MAX_TEXT 2048
+#define MAX_REMOTES 10
 
 typedef struct {
     char server[256];
@@ -26,23 +29,35 @@ typedef struct {
 } RemoteServer;
 
 typedef struct {
-    RemoteServer remote[10];
+    RemoteServer remote[MAX_REMOTES];
     int remote_count;
+
     char proto[16];
     char port[16];
     char dev[16];
-    char ca[MAX_PATH];
-    char cert[MAX_PATH];
-    char key[MAX_PATH];
-    char tls_auth[MAX_PATH];
-    char tls_crypt[MAX_PATH];
-    char tls_crypt_v2[MAX_PATH];
+
+    // 文件路径
+    char ca[1024];
+    char cert[1024];
+    char key[1024];
+    char tls_auth[1024];
+    char tls_crypt[1024];
+    char tls_crypt_v2[1024];
+
+    // inline block 内容
+    char *ca_inline;
+    char *cert_inline;
+    char *key_inline;
+    char *tls_crypt_inline;
+    char *tls_crypt_v2_inline;
+
+    char key_direction[8];
     gboolean auth_user_pass;
     char cipher[64];
     char auth[64];
     gboolean comp_lzo;
     gboolean redirect_gateway;
-    char key_direction[8];
+
     char raw_config[8192];
 } OVPNConfig;
 
@@ -76,6 +91,7 @@ typedef struct {
     gboolean connection_failed;
     
     GPtrArray *vpn_connections;
+    gboolean is_running;
 } OVPNClient;
 
 static OVPNClient *app_instance = NULL;
@@ -117,6 +133,11 @@ static void log_message(const char *level, const char *format, ...) {
 static void show_notification(OVPNClient *client, const char *message, gboolean is_error) {
     char full_message[MAX_TEXT];
     
+    if (!client || !client->notification_label) {
+        log_message("ERROR", "Invalid client or notification label in show_notification");
+        return;
+    }
+    
     if (is_error) {
         snprintf(full_message, sizeof(full_message), "❌ ERROR: %s", message);
         gtk_widget_set_name(client->notification_label, "error");
@@ -128,81 +149,78 @@ static void show_notification(OVPNClient *client, const char *message, gboolean 
     gtk_label_set_text(GTK_LABEL(client->notification_label), full_message);
     gtk_widget_show(client->notification_label);
     
-    // 5秒后自动隐藏
+    // 5秒后自动隐藏 - 修复函数类型转换警告
     g_timeout_add_seconds(is_error ? 10 : 5, (GSourceFunc)gtk_widget_hide, client->notification_label);
 }
 
 // 解析OVPN文件
+static char* read_inline_block(FILE *file, const char *end_tag) {
+    char line[2048];
+    size_t buf_size = 8192;
+    size_t used = 0;
+    char *buffer = g_malloc0(buf_size);
+
+    while (fgets(line, sizeof(line), file)) {
+        if (strncmp(line, end_tag, strlen(end_tag)) == 0) {
+            break; // 读到结束标签
+        }
+        size_t len = strlen(line);
+        if (used + len + 1 > buf_size) {
+            buf_size *= 2;
+            buffer = g_realloc(buffer, buf_size);
+        }
+        strcpy(buffer + used, line);
+        used += len;
+    }
+    return buffer;
+}
+
 static OVPNConfig* parse_ovpn_file(const char *filepath) {
     FILE *file;
-    char line[1024];
+    char line[2048];
     OVPNConfig *config;
-    regex_t regex;
-    regmatch_t matches[4];
-    
+
     log_message("INFO", "Parsing OVPN file: %s", filepath);
-    
+
     file = fopen(filepath, "r");
     if (!file) {
         log_message("ERROR", "Failed to open file: %s", filepath);
         return NULL;
     }
-    
+
     config = g_malloc0(sizeof(OVPNConfig));
     strcpy(config->proto, "udp");
     strcpy(config->port, "1194");
     strcpy(config->dev, "tun");
-    
+
     while (fgets(line, sizeof(line), file)) {
-        // 移除换行符
         line[strcspn(line, "\r\n")] = 0;
-        
-        // 跳过注释和空行
         if (line[0] == '#' || line[0] == '\0') continue;
-        
-        // 解析remote指令
-        if (regcomp(&regex, "^remote[[:space:]]+([^[:space:]]+)([[:space:]]+([0-9]+))?([[:space:]]+([a-zA-Z]+))?", REG_EXTENDED) == 0) {
-            if (regexec(&regex, line, 4, matches, 0) == 0 && config->remote_count < 10) {
-                // 提取服务器地址
-                int len = matches[1].rm_eo - matches[1].rm_so;
-                strncpy(config->remote[config->remote_count].server, line + matches[1].rm_so, len);
-                config->remote[config->remote_count].server[len] = '\0';
-                
-                // 提取端口（如果存在）
-                if (matches[2].rm_so != -1) {
-                    len = matches[3].rm_eo - matches[3].rm_so;
-                    strncpy(config->remote[config->remote_count].port, line + matches[3].rm_so, len);
-                    config->remote[config->remote_count].port[len] = '\0';
-                } else {
-                    strcpy(config->remote[config->remote_count].port, "1194");
-                }
-                
-                // 提取协议（如果存在）
-                if (matches[3].rm_so != -1) {
-                    len = matches[4].rm_eo - matches[4].rm_so;
-                    strncpy(config->remote[config->remote_count].proto, line + matches[4].rm_so, len);
-                    config->remote[config->remote_count].proto[len] = '\0';
-                } else {
-                    strcpy(config->remote[config->remote_count].proto, "udp");
-                }
-                
-                config->remote_count++;
-                log_message("DEBUG", "Found remote server: %s:%s (%s)", 
-                          config->remote[config->remote_count-1].server,
-                          config->remote[config->remote_count-1].port,
-                          config->remote[config->remote_count-1].proto);
-            }
-            regfree(&regex);
+
+        // remote
+        if (strncmp(line, "remote ", 7) == 0 && config->remote_count < MAX_REMOTES) {
+            char server[256], port[16] = "1194", proto[16] = "udp";
+            int n = sscanf(line + 7, "%255s %15s %15s", server, port, proto);
+            strcpy(config->remote[config->remote_count].server, server);
+            if (n >= 2) strcpy(config->remote[config->remote_count].port, port);
+            else strcpy(config->remote[config->remote_count].port, "1194");
+            if (n == 3) strcpy(config->remote[config->remote_count].proto, proto);
+            else strcpy(config->remote[config->remote_count].proto, "udp");
+            config->remote_count++;
+            continue;
         }
-        
-        // 解析其他指令
+
+        // proto/port/dev
         if (strncmp(line, "proto ", 6) == 0) {
             sscanf(line + 6, "%15s", config->proto);
         } else if (strncmp(line, "port ", 5) == 0) {
             sscanf(line + 5, "%15s", config->port);
         } else if (strncmp(line, "dev ", 4) == 0) {
             sscanf(line + 4, "%15s", config->dev);
-        } else if (strncmp(line, "ca ", 3) == 0) {
+        }
+
+        // 文件型 ca/cert/key/tls-auth/tls-crypt
+        else if (strncmp(line, "ca ", 3) == 0) {
             sscanf(line + 3, "%1023s", config->ca);
         } else if (strncmp(line, "cert ", 5) == 0) {
             sscanf(line + 5, "%1023s", config->cert);
@@ -216,9 +234,21 @@ static OVPNConfig* parse_ovpn_file(const char *filepath) {
             }
         } else if (strncmp(line, "tls-crypt ", 10) == 0) {
             sscanf(line + 10, "%1023s", config->tls_crypt);
-        } else if (strncmp(line, "tls-crypt-v2 ", 13) == 0) {
-            sscanf(line + 13, "%1023s", config->tls_crypt_v2);
-        } else if (strncmp(line, "auth-user-pass", 14) == 0) {
+        }
+
+        // inline block
+        else if (strcmp(line, "<ca>") == 0) {
+            config->ca_inline = read_inline_block(file, "</ca>");
+        } else if (strcmp(line, "<cert>") == 0) {
+            config->cert_inline = read_inline_block(file, "</cert>");
+        } else if (strcmp(line, "<key>") == 0) {
+            config->key_inline = read_inline_block(file, "</key>");
+        } else if (strcmp(line, "<tls-crypt>") == 0) {
+            config->tls_crypt_inline = read_inline_block(file, "</tls-crypt>");
+        }
+
+        // 其他
+        else if (strncmp(line, "auth-user-pass", 14) == 0) {
             config->auth_user_pass = TRUE;
         } else if (strncmp(line, "cipher ", 7) == 0) {
             sscanf(line + 7, "%63s", config->cipher);
@@ -229,46 +259,63 @@ static OVPNConfig* parse_ovpn_file(const char *filepath) {
         } else if (strncmp(line, "redirect-gateway", 16) == 0) {
             config->redirect_gateway = TRUE;
         }
-        
+
         // 保存原始配置
         if (strlen(config->raw_config) + strlen(line) + 2 < sizeof(config->raw_config)) {
             strcat(config->raw_config, line);
             strcat(config->raw_config, "\n");
         }
     }
-    
+
     fclose(file);
+    log_message("INFO", "End Parsing OVPN file: %s", filepath);
     return config;
 }
 
 // 验证证书文件
 static gboolean validate_certificates(OVPNConfig *config) {
     gboolean valid = TRUE;
-    
-    if (strlen(config->ca) == 0) {
+
+    // CA
+    if (strlen(config->ca) == 0 && !config->ca_inline) {
         log_message("ERROR", "CA certificate is required");
         valid = FALSE;
-    } else if (access(config->ca, R_OK) != 0) {
+    } else if (strlen(config->ca) > 0 && access(config->ca, R_OK) != 0) {
         log_message("ERROR", "CA certificate file not found: %s", config->ca);
         valid = FALSE;
     }
-    
+
+    // client cert/key
     if (!config->auth_user_pass) {
-        if (strlen(config->cert) > 0 && access(config->cert, R_OK) != 0) {
+        if (strlen(config->cert) == 0 && !config->cert_inline) {
+            log_message("ERROR", "Client certificate is required");
+            valid = FALSE;
+        } else if (strlen(config->cert) > 0 && access(config->cert, R_OK) != 0) {
             log_message("ERROR", "Client certificate file not found: %s", config->cert);
             valid = FALSE;
         }
-        if (strlen(config->key) > 0 && access(config->key, R_OK) != 0) {
+
+        if (strlen(config->key) == 0 && !config->key_inline) {
+            log_message("ERROR", "Private key is required");
+            valid = FALSE;
+        } else if (strlen(config->key) > 0 && access(config->key, R_OK) != 0) {
             log_message("ERROR", "Private key file not found: %s", config->key);
             valid = FALSE;
         }
     }
-    
+
+    // TLS auth/crypt
     if (strlen(config->tls_auth) > 0 && access(config->tls_auth, R_OK) != 0) {
         log_message("ERROR", "TLS auth key file not found: %s", config->tls_auth);
         valid = FALSE;
     }
-    
+    if (strlen(config->tls_crypt) == 0 && !config->tls_crypt_inline) {
+        // not required
+    } else if (strlen(config->tls_crypt) > 0 && access(config->tls_crypt, R_OK) != 0) {
+        log_message("ERROR", "TLS crypt key file not found: %s", config->tls_crypt);
+        valid = FALSE;
+    }
+
     return valid;
 }
 
@@ -281,7 +328,7 @@ static NMConnection* create_nm_vpn_connection(OVPNClient *client, const char *na
     uuid_t uuid;
     char uuid_str[37];
     char ovpn_dir[MAX_PATH];
-    char full_path[MAX_PATH];
+    char full_path[MAX_PATH * 2]; // 增大缓冲区以避免截断警告
     
     log_message("INFO", "Creating NetworkManager VPN connection: %s", name);
     
@@ -415,6 +462,8 @@ static void connection_state_changed_cb(NMActiveConnection *active_connection,
                                       gpointer user_data) {
     OVPNClient *client = (OVPNClient *)user_data;
     
+    (void)active_connection; // 避免未使用参数警告
+    
     switch (state) {
         case NM_ACTIVE_CONNECTION_STATE_ACTIVATED:
             gtk_label_set_text(GTK_LABEL(client->connection_status_label), "VPN Status: Connected");
@@ -463,6 +512,8 @@ static void activate_vpn_connection(OVPNClient *client) {
 // 测试连接按钮回调
 static void test_connection_clicked(GtkWidget *widget, gpointer user_data) {
     OVPNClient *client = (OVPNClient *)user_data;
+    
+    (void)widget; // 避免未使用参数警告
     
     if (!client->parsed_config || client->parsed_config->remote_count == 0) {
         show_notification(client, "No server configuration found", TRUE);
@@ -518,6 +569,8 @@ static void connect_vpn_clicked(GtkWidget *widget, gpointer user_data) {
     OVPNClient *client = (OVPNClient *)user_data;
     const char *username, *password;
     
+    (void)widget; // 避免未使用参数警告
+    
     if (!client->created_connection) {
         show_notification(client, "No VPN connection available. Please create one first.", TRUE);
         return;
@@ -531,6 +584,8 @@ static void connect_vpn_clicked(GtkWidget *widget, gpointer user_data) {
             show_notification(client, "Username is required for this VPN connection", TRUE);
             return;
         }
+        // 这里可以添加密码验证逻辑
+        (void)password; // 避免未使用变量警告
     }
     
     show_notification(client, "Connecting to VPN...", FALSE);
@@ -542,6 +597,8 @@ static void connect_vpn_clicked(GtkWidget *widget, gpointer user_data) {
 // 断开VPN按钮回调
 static void disconnect_vpn_clicked(GtkWidget *widget, gpointer user_data) {
     OVPNClient *client = (OVPNClient *)user_data;
+    
+    (void)widget; // 避免未使用参数警告
     
     if (!client->active_connection) {
         show_notification(client, "No active VPN connection to disconnect", TRUE);
@@ -608,9 +665,12 @@ static void file_chosen_cb(GtkWidget *dialog, gint response_id, gpointer user_da
 
 // 导入文件按钮回调
 static void import_file_clicked(GtkWidget *widget, gpointer user_data) {
+    
     OVPNClient *client = (OVPNClient *)user_data;
     GtkWidget *dialog;
     GtkFileFilter *filter;
+    
+    (void)widget; // 避免未使用参数警告
     
     dialog = gtk_file_chooser_dialog_new("Select .ovpn file",
                                        GTK_WINDOW(client->window),
@@ -626,15 +686,60 @@ static void import_file_clicked(GtkWidget *widget, gpointer user_data) {
     
     g_signal_connect(dialog, "response", G_CALLBACK(file_chosen_cb), client);
     gtk_widget_show_all(dialog);
+    // log_message("INFO", "OVPN file import and parsing completed.");
 }
 
-// 创建系统托盘指示器
-static void create_indicator(OVPNClient *client) {
+// 退出菜单项回调
+static void quit_menu_clicked(GtkWidget *widget, gpointer user_data) {
+    (void)widget;
+    (void)user_data;
+    log_message("INFO", "Quit requested from menu");
+    gtk_main_quit();
+}
+
+// 显示窗口菜单项回调
+static void show_window_clicked(GtkWidget *widget, gpointer user_data) {
+    OVPNClient *client = (OVPNClient *)user_data;
+    (void)widget;
+    
+    gtk_window_present(GTK_WINDOW(client->window));
+    gtk_widget_show_all(client->window);
+}
+
+// 窗口关闭事件处理
+static gboolean on_window_delete_event(GtkWidget *widget, GdkEvent *event, gpointer user_data) {
+    OVPNClient *client = (OVPNClient *)user_data;
+    (void)event;
+    
+    log_message("INFO", "Window close requested");
+    
+    // 如果有系统托盘指示器，隐藏窗口到托盘
+    if (client->indicator) {
+        log_message("INFO", "Hiding window to system tray");
+        gtk_widget_hide(widget);
+        return TRUE; // 阻止窗口真正关闭
+    } else {
+        // 没有系统托盘时，退出应用程序
+        log_message("INFO", "No system tray - quitting application");
+        gtk_main_quit();
+        return FALSE;
+    }
+}
+
+// 创建系统托盘指示器 - 添加错误处理
+static gboolean create_indicator(OVPNClient *client) {
     GtkWidget *menu_item;
+    
+    log_message("INFO", "Creating system tray indicator...");
     
     client->indicator = app_indicator_new(APP_ID,
                                         "network-vpn",
                                         APP_INDICATOR_CATEGORY_SYSTEM_SERVICES);
+    
+    if (!client->indicator) {
+        log_message("WARNING", "Failed to create system tray indicator - continuing without it");
+        return FALSE;
+    }
     
     app_indicator_set_status(client->indicator, APP_INDICATOR_STATUS_ACTIVE);
     app_indicator_set_attention_icon(client->indicator, "network-vpn-acquiring");
@@ -643,53 +748,64 @@ static void create_indicator(OVPNClient *client) {
     client->indicator_menu = gtk_menu_new();
     
     menu_item = gtk_menu_item_new_with_label("Show Window");
-    g_signal_connect_swapped(menu_item, "activate", G_CALLBACK(gtk_window_present), client->window);
+    g_signal_connect(menu_item, "activate", G_CALLBACK(show_window_clicked), client);
     gtk_menu_shell_append(GTK_MENU_SHELL(client->indicator_menu), menu_item);
     
     menu_item = gtk_separator_menu_item_new();
     gtk_menu_shell_append(GTK_MENU_SHELL(client->indicator_menu), menu_item);
     
     menu_item = gtk_menu_item_new_with_label("Quit");
-    g_signal_connect_swapped(menu_item, "activate", G_CALLBACK(gtk_main_quit), NULL);
+    g_signal_connect(menu_item, "activate", G_CALLBACK(quit_menu_clicked), client);
     gtk_menu_shell_append(GTK_MENU_SHELL(client->indicator_menu), menu_item);
     
     gtk_widget_show_all(client->indicator_menu);
     app_indicator_set_menu(client->indicator, GTK_MENU(client->indicator_menu));
+    
+    log_message("INFO", "System tray indicator created successfully");
+    return TRUE;
 }
 
 // 创建主窗口
 static void create_main_window(OVPNClient *client) {
-    GtkWidget *vbox, *hbox, *frame, *scrolled, *button;
+    GtkWidget *main_vbox, *hbox, *frame, *scrolled, *button;
+    GtkWidget *auth_vbox;
+    
+    log_message("INFO", "Creating main window...");
     
     client->window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(client->window), "OVPN Client with NetworkManager");
     gtk_window_set_default_size(GTK_WINDOW(client->window), 800, 600);
     gtk_container_set_border_width(GTK_CONTAINER(client->window), 10);
     
+    // 设置窗口关闭事件处理
+    g_signal_connect(client->window, "delete-event", G_CALLBACK(on_window_delete_event), client);
+    
     // 主布局
-    vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
-    gtk_container_add(GTK_CONTAINER(client->window), vbox);
+    main_vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+    gtk_container_add(GTK_CONTAINER(client->window), main_vbox);
     
     // 导入按钮
     hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
     button = gtk_button_new_with_label("Import .ovpn File");
     g_signal_connect(button, "clicked", G_CALLBACK(import_file_clicked), client);
     gtk_box_pack_start(GTK_BOX(hbox), button, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(main_vbox), hbox, FALSE, FALSE, 0);
     
     // 状态标签
     client->status_label = gtk_label_new("No file imported yet.");
-    gtk_box_pack_start(GTK_BOX(vbox), client->status_label, FALSE, FALSE, 0);
+    gtk_widget_set_halign(client->status_label, GTK_ALIGN_START);
+    gtk_box_pack_start(GTK_BOX(main_vbox), client->status_label, FALSE, FALSE, 0);
     
     // 通知标签
     client->notification_label = gtk_label_new("");
     gtk_label_set_line_wrap(GTK_LABEL(client->notification_label), TRUE);
     gtk_widget_set_no_show_all(client->notification_label, TRUE);
-    gtk_box_pack_start(GTK_BOX(vbox), client->notification_label, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(main_vbox), client->notification_label, FALSE, FALSE, 0);
     
     // VPN连接状态
     client->connection_status_label = gtk_label_new("VPN Status: Disconnected");
-    gtk_box_pack_start(GTK_BOX(vbox), client->connection_status_label, FALSE, FALSE, 0);
+    gtk_widget_set_halign(client->connection_status_label, GTK_ALIGN_START);
+    gtk_box_pack_start(GTK_BOX(main_vbox), client->connection_status_label, FALSE, FALSE, 0);
     
     // 连接名称输入
     hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
@@ -697,19 +813,19 @@ static void create_main_window(OVPNClient *client) {
     client->name_entry = gtk_entry_new();
     gtk_entry_set_placeholder_text(GTK_ENTRY(client->name_entry), "Enter connection name...");
     gtk_box_pack_start(GTK_BOX(hbox), client->name_entry, TRUE, TRUE, 0);
-    gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(main_vbox), hbox, FALSE, FALSE, 0);
     
     // 认证框架
     frame = gtk_frame_new("Authentication (if required)");
-    vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
-    gtk_container_set_border_width(GTK_CONTAINER(vbox), 5);
+    auth_vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+    gtk_container_set_border_width(GTK_CONTAINER(auth_vbox), 5);
     
     hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
     gtk_box_pack_start(GTK_BOX(hbox), gtk_label_new("Username:"), FALSE, FALSE, 0);
     client->username_entry = gtk_entry_new();
     gtk_entry_set_placeholder_text(GTK_ENTRY(client->username_entry), "VPN username (optional)");
     gtk_box_pack_start(GTK_BOX(hbox), client->username_entry, TRUE, TRUE, 0);
-    gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(auth_vbox), hbox, FALSE, FALSE, 0);
     
     hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
     gtk_box_pack_start(GTK_BOX(hbox), gtk_label_new("Password:"), FALSE, FALSE, 0);
@@ -717,10 +833,10 @@ static void create_main_window(OVPNClient *client) {
     gtk_entry_set_placeholder_text(GTK_ENTRY(client->password_entry), "VPN password (optional)");
     gtk_entry_set_visibility(GTK_ENTRY(client->password_entry), FALSE);
     gtk_box_pack_start(GTK_BOX(hbox), client->password_entry, TRUE, TRUE, 0);
-    gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(auth_vbox), hbox, FALSE, FALSE, 0);
     
-    gtk_container_add(GTK_CONTAINER(frame), vbox);
-    gtk_box_pack_start(GTK_BOX(gtk_widget_get_parent(client->connection_status_label)), frame, FALSE, FALSE, 0);
+    gtk_container_add(GTK_CONTAINER(frame), auth_vbox);
+    gtk_box_pack_start(GTK_BOX(main_vbox), frame, FALSE, FALSE, 0);
     
     // 按钮区域
     hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
@@ -740,7 +856,7 @@ static void create_main_window(OVPNClient *client) {
     gtk_widget_set_sensitive(client->disconnect_button, FALSE);
     gtk_box_pack_start(GTK_BOX(hbox), client->disconnect_button, FALSE, FALSE, 0);
     
-    gtk_box_pack_start(GTK_BOX(gtk_widget_get_parent(client->connection_status_label)), hbox, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(main_vbox), hbox, FALSE, FALSE, 0);
     
     // 配置分析区域
     frame = gtk_frame_new("OpenVPN Configuration Analysis");
@@ -752,14 +868,37 @@ static void create_main_window(OVPNClient *client) {
     client->result_view = gtk_text_view_new();
     gtk_text_view_set_editable(GTK_TEXT_VIEW(client->result_view), FALSE);
     gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(client->result_view), GTK_WRAP_WORD_CHAR);
+    
+    // 设置默认文本
+    GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(client->result_view));
+    gtk_text_buffer_set_text(buffer, 
+        "Import an .ovpn file to see configuration analysis here.\n\n"
+        "This application provides:\n"
+        "• Real VPN connections through NetworkManager\n"
+        "• OpenVPN configuration parsing\n"
+        "• Connection testing and monitoring\n"
+        "• System tray integration\n\n"
+        "Log file: /tmp/ovpn_importer.log", -1);
+    
     gtk_container_add(GTK_CONTAINER(scrolled), client->result_view);
     gtk_container_add(GTK_CONTAINER(frame), scrolled);
-    gtk_box_pack_start(GTK_BOX(gtk_widget_get_parent(client->connection_status_label)), frame, TRUE, TRUE, 0);
+    gtk_box_pack_start(GTK_BOX(main_vbox), frame, TRUE, TRUE, 0);
+    
+    log_message("INFO", "Main window created successfully");
 }
 
 // 应用程序激活回调
 static void activate(GtkApplication *app, gpointer user_data) {
     OVPNClient *client = (OVPNClient *)user_data;
+    
+    log_message("INFO", "Activating application...");
+    
+    // 防止重复激活
+    if (client->window) {
+        log_message("INFO", "Application already activated, showing window");
+        gtk_window_present(GTK_WINDOW(client->window));
+        return;
+    }
     
     // 初始化NetworkManager客户端
     client->nm_client = nm_client_new(NULL, NULL);
@@ -773,13 +912,50 @@ static void activate(GtkApplication *app, gpointer user_data) {
     // 创建主窗口
     create_main_window(client);
     
-    // 创建系统托盘指示器
+    // 设置应用程序窗口
+    gtk_application_add_window(app, GTK_WINDOW(client->window));
+    
+    // 创建系统托盘指示器（可选，失败不影响主程序）
     create_indicator(client);
     
+    // 显示窗口
+    log_message("INFO", "Showing main window...");
     gtk_widget_show_all(client->window);
     
-    // 窗口关闭时隐藏到系统托盘
-    g_signal_connect(client->window, "delete-event", G_CALLBACK(gtk_widget_hide_on_delete), NULL);
+    // 确保窗口获得焦点
+    gtk_window_present(GTK_WINDOW(client->window));
+    
+    client->is_running = TRUE;
+    
+    log_message("INFO", "Application activation completed");
+}
+
+// 应用程序关闭处理
+static void on_app_shutdown(GtkApplication *app, gpointer user_data) {
+    OVPNClient *client = (OVPNClient *)user_data;
+    (void)app;
+    
+    log_message("INFO", "Application shutting down...");
+    
+    client->is_running = FALSE;
+    
+    // 清理资源
+    if (client->parsed_config) {
+        g_free(client->parsed_config);
+        client->parsed_config = NULL;
+    }
+    
+    if (client->vpn_connections) {
+        g_ptr_array_free(client->vpn_connections, TRUE);
+        client->vpn_connections = NULL;
+    }
+    
+    if (client->nm_client) {
+        g_object_unref(client->nm_client);
+        client->nm_client = NULL;
+    }
+    
+    log_message("INFO", "Application cleanup completed");
 }
 
 // 主函数
@@ -788,27 +964,33 @@ int main(int argc, char *argv[]) {
     OVPNClient client = {0};
     int status;
     
+    log_message("INFO", "Starting OVPN Client application...");
+    
     app_instance = &client;
+    client.is_running = FALSE;
     
     // 初始化GTK应用程序
     app = gtk_application_new(APP_ID, G_APPLICATION_FLAGS_NONE);
+    if (!app) {
+        log_message("ERROR", "Failed to create GTK application");
+        return 1;
+    }
+    
     client.app = app;
     
+    // 连接信号
     g_signal_connect(app, "activate", G_CALLBACK(activate), &client);
+    g_signal_connect(app, "shutdown", G_CALLBACK(on_app_shutdown), &client);
     
+    log_message("INFO", "Running GTK application...");
     status = g_application_run(G_APPLICATION(app), argc, argv);
     
-    // 清理
-    if (client.parsed_config) {
-        g_free(client.parsed_config);
-    }
+    log_message("INFO", "Application exiting with status: %d", status);
     
-    if (client.vpn_connections) {
-        g_ptr_array_free(client.vpn_connections, TRUE);
-    }
-    
+    // 最终清理
     if (log_file) {
         fclose(log_file);
+        log_file = NULL;
     }
     
     g_object_unref(app);
