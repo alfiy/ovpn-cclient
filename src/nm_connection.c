@@ -1,8 +1,8 @@
+#include <uuid/uuid.h>
+#include <gtk-3.0/gtk/gtk.h> 
 #include "../include/nm_connection.h"
 #include "../include/log_util.h"
 #include "../include/notify.h"
-#include <uuid/uuid.h>
-#include <gtk-3.0/gtk/gtk.h> 
 
 // 创建NetworkManager VPN连接
 NMConnection* create_nm_vpn_connection(OVPNClient *client, const char *name, OVPNConfig *config) {

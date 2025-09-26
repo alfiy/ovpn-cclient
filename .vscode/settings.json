@@ -5,6 +5,9 @@
         "socket.h": "c",
         "nm_helper.h": "c",
         "ovpn_client.h": "c",
-        "app-indicator.h": "c"
+        "app-indicator.h": "c",
+        "structs.h": "c",
+        "ui_builder.h": "c",
+        "nm_connection.h": "c"
     }
 }

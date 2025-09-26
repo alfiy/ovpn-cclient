@@ -16,7 +16,7 @@ void connection_state_changed_cb(NMActiveConnection *active_connection,
                                         gpointer user_data);
 
 void add_connection_done(GObject *source_obj, GAsyncResult *res, gpointer user_data);
-void connect_vpn_clicked(GtkWidget *widget, gpointer user_data);
+
 
 #endif
 
