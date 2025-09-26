@@ -1,69 +1,70 @@
-# Makefile for OVPN Client (GTK3 + NetworkManager)
-# Author: Generated for C GTK3 OpenVPN Client
-
-# Project settings
+# Makefile for OVPN Client (modular version)
 PROJECT_NAME = ovpn-client
-SOURCE_FILE = ovpn_client.c
-TARGET = $(PROJECT_NAME)
+SRC_DIR = src
+INC_DIR = include
+BUILD_DIR = build
 
-# Compiler settings
+SRCS = $(wildcard $(SRC_DIR)/*.c)
+OBJS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS))
+DEPS = $(OBJS:.o=.d)
+
 CC = gcc
 CFLAGS = -Wall -Wextra -std=c99 -O2
 DEBUG_CFLAGS = -Wall -Wextra -std=c99 -g -DDEBUG
 
-# Package configurations
 GTK_CFLAGS = $(shell pkg-config --cflags gtk+-3.0)
 GTK_LIBS = $(shell pkg-config --libs gtk+-3.0)
-
 NM_CFLAGS = $(shell pkg-config --cflags libnm)
 NM_LIBS = $(shell pkg-config --libs libnm)
-
 INDICATOR_CFLAGS = $(shell pkg-config --cflags ayatana-appindicator3-0.1)
 INDICATOR_LIBS = $(shell pkg-config --libs ayatana-appindicator3-0.1)
-
-# Additional libraries
 EXTRA_LIBS = -luuid -lm
 
-# All compiler flags and libraries
-ALL_CFLAGS = $(CFLAGS) $(GTK_CFLAGS) $(NM_CFLAGS) $(INDICATOR_CFLAGS)
+ALL_CFLAGS = $(CFLAGS) $(GTK_CFLAGS) $(NM_CFLAGS) $(INDICATOR_CFLAGS) -MMD -MP -I$(SRC_DIR)
 ALL_LIBS = $(GTK_LIBS) $(NM_LIBS) $(INDICATOR_LIBS) $(EXTRA_LIBS)
 
-# Debug build flags
-DEBUG_ALL_CFLAGS = $(DEBUG_CFLAGS) $(GTK_CFLAGS) $(NM_CFLAGS) $(INDICATOR_CFLAGS)
+DEBUG_ALL_CFLAGS = $(DEBUG_CFLAGS) $(GTK_CFLAGS) $(NM_CFLAGS) $(INDICATOR_CFLAGS) -MMD -MP -I$(SRC_DIR)
 
-# Default target
+TARGET = $(BUILD_DIR)/$(PROJECT_NAME)
+TARGET_DEBUG = $(BUILD_DIR)/$(PROJECT_NAME)-debug
+
+.PHONY: all debug install uninstall clean check-deps info run run-debug test-compile package help
+
 all: $(TARGET)
 
-# Main target
-$(TARGET): $(SOURCE_FILE)
-	@echo "Building $(PROJECT_NAME)..."
-	$(CC) $(ALL_CFLAGS) -o $(TARGET) $(SOURCE_FILE) $(ALL_LIBS)
-	@echo "Build completed successfully!"
+debug: $(TARGET_DEBUG)
 
-# Debug build
-debug: $(SOURCE_FILE)
-	@echo "Building $(PROJECT_NAME) in debug mode..."
-	$(CC) $(DEBUG_ALL_CFLAGS) -o $(TARGET)-debug $(SOURCE_FILE) $(ALL_LIBS)
-	@echo "Debug build completed successfully!"
+$(BUILD_DIR):
+	mkdir -p $@
+
+# Pattern rule for building .o files
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
+	$(CC) $(ALL_CFLAGS) -c $< -o $@
+
+$(TARGET): $(OBJS)
+	@echo "Linking $@..."
+	$(CC) $(OBJS) -o $@ $(ALL_LIBS)
+	@echo "Build completed successfully! ($@)"
+
+$(TARGET_DEBUG): $(BUILD_DIR)
+	$(CC) $(DEBUG_ALL_CFLAGS) $(SRCS) -o $@ $(ALL_LIBS)
+	@echo "Debug build completed successfully! ($@)"
 
 # Install target
 install: $(TARGET)
 	@echo "Installing $(PROJECT_NAME)..."
-	sudo cp $(TARGET) /usr/local/bin/
+	sudo cp $(TARGET) /usr/local/bin/$(PROJECT_NAME)
 	@echo "Installation completed!"
 
-# Uninstall target
 uninstall:
 	@echo "Uninstalling $(PROJECT_NAME)..."
-	sudo rm -f /usr/local/bin/$(TARGET)
+	sudo rm -f /usr/local/bin/$(PROJECT_NAME)
 	@echo "Uninstallation completed!"
 
-# Clean build artifacts
 clean:
 	@echo "Cleaning build artifacts..."
-	rm -f $(TARGET) $(TARGET)-debug
-	rm -f *.o
-	rm -f /tmp/ovpn_importer.log
+	rm -rf $(BUILD_DIR)
+	rm -f /tmp/ovpn_client.log /tmp/ovpn_importer.log
 	@echo "Clean completed!"
 
 # Check dependencies
@@ -77,11 +78,10 @@ check-deps:
 	@echo "Checking additional libraries..."
 	@ldconfig -p | grep -q libuuid && echo "✓ UUID library found" || echo "✗ UUID library not found"
 
-# Show build information
 info:
 	@echo "=== Build Information ==="
 	@echo "Project: $(PROJECT_NAME)"
-	@echo "Source: $(SOURCE_FILE)"
+	@echo "Sources: $(SRCS)"
 	@echo "Target: $(TARGET)"
 	@echo "Compiler: $(CC)"
 	@echo "GTK3 CFLAGS: $(GTK_CFLAGS)"
@@ -92,31 +92,26 @@ info:
 	@echo "AppIndicator LIBS: $(INDICATOR_LIBS)"
 	@echo "========================="
 
-# Run the application
 run: $(TARGET)
 	@echo "Running $(PROJECT_NAME)..."
 	./$(TARGET)
 
-# Run in debug mode
 run-debug: debug
 	@echo "Running $(PROJECT_NAME) in debug mode..."
-	./$(TARGET)-debug
+	./$(TARGET_DEBUG)
 
-# Test build (compile only, don't link)
 test-compile:
 	@echo "Testing compilation..."
-	$(CC) $(ALL_CFLAGS) -c $(SOURCE_FILE) -o test.o
+	$(CC) $(ALL_CFLAGS) -c $(SRC_DIR)/main.c -o /tmp/test.o
 	@echo "Compilation test passed!"
-	rm -f test.o
+	rm -f /tmp/test.o
 
-# Package source (create tarball)
 package:
 	@echo "Creating source package..."
-	tar -czf $(PROJECT_NAME)-src.tar.gz $(SOURCE_FILE) Makefile build.sh README.md 2>/dev/null || \
-	tar -czf $(PROJECT_NAME)-src.tar.gz $(SOURCE_FILE) Makefile build.sh
+	tar -czf $(PROJECT_NAME)-src.tar.gz $(SRC_DIR)/*.c $(SRC_DIR)/*.h Makefile build.sh README.md 2>/dev/null || \
+	tar -czf $(PROJECT_NAME)-src.tar.gz $(SRC_DIR)/*.c $(SRC_DIR)/*.h Makefile build.sh
 	@echo "Package created: $(PROJECT_NAME)-src.tar.gz"
 
-# Help target
 help:
 	@echo "Available targets:"
 	@echo "  all           - Build the application (default)"
@@ -132,5 +127,4 @@ help:
 	@echo "  package       - Create source tarball"
 	@echo "  help          - Show this help message"
 
-# Phony targets
-.PHONY: all debug install uninstall clean check-deps info run run-debug test-compile package help
+-include $(DEPS)

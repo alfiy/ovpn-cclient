@@ -23,7 +23,7 @@ A simplified OpenVPN client GUI application built with C and GTK3.
 **Ubuntu/Debian:**
 ```bash
 sudo apt-get update
-sudo apt-get install build-essential libgtk-3-dev pkg-config
+sudo apt-get install build-essential libgtk-3-dev pkg-config libnm-dev
 ```
 
 **Fedora/RHEL/CentOS:**

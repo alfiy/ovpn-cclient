@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "inet.h": "c",
+        "stat.h": "c",
+        "socket.h": "c",
+        "nm_helper.h": "c",
+        "ovpn_client.h": "c",
+        "app-indicator.h": "c"
+    }
+}

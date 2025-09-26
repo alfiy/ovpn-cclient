@@ -9,7 +9,7 @@ set -e  # Exit on any error
 # Script configuration
 SCRIPT_NAME="build.sh"
 PROJECT_NAME="ovpn-client"
-SOURCE_FILE="ovpn_client.c"
+SRC_DIR="src"
 BUILD_DIR="build"
 LOG_FILE="build.log"
 
@@ -204,76 +204,94 @@ clean_build() {
     rm -f "$PROJECT_NAME" "${PROJECT_NAME}-debug" 2>/dev/null || true
     rm -f *.o 2>/dev/null || true
     rm -rf "$BUILD_DIR" 2>/dev/null || true
-    rm -f /tmp/ovpn_importer.log 2>/dev/null || true
+    rm -f /tmp/ovpn_client.log 2>/dev/null || true
     log_success "Clean completed"
 }
 
 # Function to build the project
 build_project() {
     local build_type="$1"
-    
     log_info "Starting build process..."
-    
-    # Check if source file exists
-    if [ ! -f "$SOURCE_FILE" ]; then
-        log_error "Source file '$SOURCE_FILE' not found"
+
+    # === 检查源码目录是否存在 ===
+    if [ ! -d "$SRC_DIR" ]; then
+        log_error "Source directory '$SRC_DIR' not found"
         return 1
     fi
-    
-    # Get all required flags using pkg-config
+
+    mkdir -p "$BUILD_DIR"
+    local src_files=($SRC_DIR/*.c)
+    if [ "${#src_files[@]}" -eq 0 ]; then
+        log_error "No source files found in $SRC_DIR"
+        return 1
+    fi
+
+    # === 获取编译参数 ===
     local gtk_cflags=$(pkg-config --cflags gtk+-3.0 2>/dev/null)
     local gtk_libs=$(pkg-config --libs gtk+-3.0 2>/dev/null)
     local nm_cflags=$(pkg-config --cflags libnm 2>/dev/null)
     local nm_libs=$(pkg-config --libs libnm 2>/dev/null)
     local indicator_cflags=$(pkg-config --cflags ayatana-appindicator3-0.1 2>/dev/null)
     local indicator_libs=$(pkg-config --libs ayatana-appindicator3-0.1 2>/dev/null)
-    
-    local all_cflags="$gtk_cflags $nm_cflags $indicator_cflags"
-    local all_libs="$gtk_libs $nm_libs $indicator_libs -luuid -lm"
-    
+
+    # === 严格依赖检查 ===
     if [ -z "$gtk_cflags" ] || [ -z "$gtk_libs" ]; then
         log_error "Failed to get GTK3 compiler flags"
         return 1
     fi
-    
     if [ -z "$nm_cflags" ] || [ -z "$nm_libs" ]; then
         log_error "Failed to get NetworkManager compiler flags"
         return 1
     fi
-    
-    # Build based on type
-    if [ "$build_type" = "debug" ]; then
-        log_info "Building in debug mode..."
-        local cmd="gcc -Wall -Wextra -std=c99 -g -DDEBUG $all_cflags -o ${PROJECT_NAME}-debug $SOURCE_FILE $all_libs"
-        log_info "Build command: $cmd"
-        if eval $cmd; then
-            log_success "Debug build completed successfully"
-        else
-            log_error "Debug build failed"
-            return 1
-        fi
-    else
-        log_info "Building in release mode..."
-        local cmd="gcc -Wall -Wextra -std=c99 -O2 $all_cflags -o $PROJECT_NAME $SOURCE_FILE $all_libs"
-        log_info "Build command: $cmd"
-        if eval $cmd; then
-            log_success "Release build completed successfully"
-        else
-            log_error "Release build failed"
-            return 1
-        fi
+    if [ -z "$indicator_cflags" ] || [ -z "$indicator_libs" ]; then
+        log_error "Failed to get AppIndicator compiler flags"
+        return 1
     fi
-    
+
+    local all_cflags="$gtk_cflags $nm_cflags $indicator_cflags -I$SRC_DIR"
+    local all_libs="$gtk_libs $nm_libs $indicator_libs -luuid -lm"
+
+    # === 编译阶段 ===
+    log_info "Compiling source files..."
+    for src in "${src_files[@]}"; do
+        obj="$BUILD_DIR/$(basename "${src%.c}.o")"
+        if [ "$build_type" = "debug" ]; then
+            gcc -Wall -Wextra -std=c99 -g -DDEBUG $all_cflags -c "$src" -o "$obj" || {
+                log_error "Compilation failed: $src"
+                return 1
+            }
+        else
+            gcc -Wall -Wextra -std=c99 -O2 $all_cflags -c "$src" -o "$obj" || {
+                log_error "Compilation failed: $src"
+                return 1
+            }
+        fi
+    done
+
+    # === 链接阶段 ===
+    local objs=($BUILD_DIR/*.o)
+    local target="$BUILD_DIR/$PROJECT_NAME"
+    [ "$build_type" = "debug" ] && target="$BUILD_DIR/${PROJECT_NAME}-debug"
+
+    log_info "Linking objects..."
+    if gcc "${objs[@]}" -o "$target" $all_libs; then
+        log_success "Build completed successfully ($target)"
+    else
+        log_error "Linking failed"
+        return 1
+    fi
+
     return 0
 }
+
 
 # Function to test compilation
 test_compilation() {
     log_info "Testing compilation..."
     
     # Check if source file exists
-    if [ ! -f "$SOURCE_FILE" ]; then
-        log_error "Source file '$SOURCE_FILE' not found"
+    if [ ! -f "$SRC_DIR" ]; then
+        log_error "Source file '$SRC_DIR' not found"
         return 1
     fi
     
@@ -285,7 +303,7 @@ test_compilation() {
         return 1
     fi
     
-    local cmd="gcc -Wall -Wextra -std=c99 -O2 $all_cflags -c $SOURCE_FILE -o test.o"
+    local cmd="gcc -Wall -Wextra -std=c99 -O2 $all_cflags -c $SRC_DIR -o test.o"
     log_info "Test command: $cmd"
     
     if eval $cmd; then
@@ -319,37 +337,38 @@ install_app() {
 # Function to run the application
 run_app() {
     local build_type="$1"
-    
-    # Check if we're in a GUI environment
+    local target="$BUILD_DIR/$PROJECT_NAME"
+    [ "$build_type" = "debug" ] && target="$BUILD_DIR/${PROJECT_NAME}-debug"
+
+    # === GUI 环境检查 ===
     if [ -z "$DISPLAY" ] && [ -z "$WAYLAND_DISPLAY" ]; then
-        log_warning "No display environment detected. Make sure you're running in a GUI environment."
-        log_info "Try: export DISPLAY=:0 (for X11) or check Wayland setup"
+        log_warning "No display environment detected. This app requires a GUI."
+        log_info "If using X11, try: export DISPLAY=:0"
+        log_info "If using Wayland, ensure WAYLAND_DISPLAY is set"
     fi
-    
+
+    # === 可执行文件检查 ===
+    if [ ! -f "$target" ]; then
+        log_error "Executable '$target' not found. Please run build first."
+        return 1
+    fi
+
+    # === 运行应用 ===
     if [ "$build_type" = "debug" ]; then
-        log_info "Running application in debug mode..."
-        if [ -f "${PROJECT_NAME}-debug" ]; then
-            ./"${PROJECT_NAME}-debug"
-        else
-            log_error "Debug executable not found"
-            return 1
-        fi
+        log_info "Running application in debug mode ($target)..."
     else
-        log_info "Running application..."
-        if [ -f "$PROJECT_NAME" ]; then
-            ./"$PROJECT_NAME"
-        else
-            log_error "Executable not found"
-            return 1
-        fi
+        log_info "Running application ($target)..."
     fi
+
+    "$target"
 }
+
 
 # Function to create package
 create_package() {
     log_info "Creating source package..."
     
-    local files="$SOURCE_FILE Makefile build.sh"
+    local files="$SRC_DIR Makefile build.sh"
     if [ -f "README.md" ]; then
         files="$files README.md"
     fi
@@ -468,6 +487,7 @@ main() {
     # Clean if requested
     if [ "$clean_first" = true ]; then
         clean_build
+        exit 0
     fi
     
     # Test compilation only if requested
@@ -514,7 +534,7 @@ main() {
     log_info "GUI Troubleshooting:"
     log_info "  Check display: echo \$DISPLAY"
     log_info "  Run in debug mode: ./build.sh --debug --run"
-    log_info "  Check log file: /tmp/ovpn_importer.log"
+    log_info "  Check log file: /tmp/ovpn_client.log"
 }
 
 # Run main function with all arguments

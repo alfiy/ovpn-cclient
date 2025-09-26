@@ -1,8 +1,8 @@
-Build started at 2025年 09月 23日 星期二 17:32:06 CST
+Build started at 2025年 09月 26日 星期五 08:49:52 CST
 [0;34m[INFO][0m Starting ovpn-client build script
 [0;34m[INFO][0m Build configuration:
-[0;34m[INFO][0m   Clean first: true
-[0;34m[INFO][0m   Debug build: true
+[0;34m[INFO][0m   Clean first: false
+[0;34m[INFO][0m   Debug build: false
 [0;34m[INFO][0m   Install after: false
 [0;34m[INFO][0m   Run after: false
 [0;34m[INFO][0m   Test only: false
@@ -15,12 +15,10 @@ Build started at 2025年 09月 23日 星期二 17:32:06 CST
 [0;32m[SUCCESS][0m UUID library found
 [0;32m[SUCCESS][0m GLib found: version 2.72.4
 [0;32m[SUCCESS][0m All dependencies satisfied
-[0;34m[INFO][0m Cleaning build artifacts...
-[0;32m[SUCCESS][0m Clean completed
 [0;34m[INFO][0m Starting build process...
-[0;34m[INFO][0m Building in debug mode...
-[0;34m[INFO][0m Build command: gcc -Wall -Wextra -std=c99 -g -DDEBUG -pthread -I/usr/include/gtk-3.0 -I/usr/include/at-spi2-atk/2.0 -I/usr/include/at-spi-2.0 -I/usr/include/dbus-1.0 -I/usr/lib/x86_64-linux-gnu/dbus-1.0/include -I/usr/include/gtk-3.0 -I/usr/include/gio-unix-2.0 -I/usr/include/cairo -I/usr/include/pango-1.0 -I/usr/include/harfbuzz -I/usr/include/pango-1.0 -I/usr/include/fribidi -I/usr/include/harfbuzz -I/usr/include/atk-1.0 -I/usr/include/cairo -I/usr/include/pixman-1 -I/usr/include/uuid -I/usr/include/freetype2 -I/usr/include/gdk-pixbuf-2.0 -I/usr/include/libpng16 -I/usr/include/x86_64-linux-gnu -I/usr/include/libmount -I/usr/include/blkid -I/usr/include/glib-2.0 -I/usr/lib/x86_64-linux-gnu/glib-2.0/include -pthread -I/usr/include/libnm -I/usr/include/libmount -I/usr/include/blkid -I/usr/include/glib-2.0 -I/usr/lib/x86_64-linux-gnu/glib-2.0/include -pthread -I/usr/include/libayatana-appindicator3-0.1 -I/usr/include/libayatana-indicator3-0.4 -I/usr/include/libayatana-ido3-0.4 -I/usr/include/libdbusmenu-glib-0.4 -I/usr/include/gtk-3.0 -I/usr/include/at-spi2-atk/2.0 -I/usr/include/at-spi-2.0 -I/usr/include/dbus-1.0 -I/usr/lib/x86_64-linux-gnu/dbus-1.0/include -I/usr/include/gtk-3.0 -I/usr/include/gio-unix-2.0 -I/usr/include/cairo -I/usr/include/pango-1.0 -I/usr/include/harfbuzz -I/usr/include/pango-1.0 -I/usr/include/fribidi -I/usr/include/harfbuzz -I/usr/include/atk-1.0 -I/usr/include/cairo -I/usr/include/pixman-1 -I/usr/include/uuid -I/usr/include/freetype2 -I/usr/include/gdk-pixbuf-2.0 -I/usr/include/libpng16 -I/usr/include/x86_64-linux-gnu -I/usr/include/libmount -I/usr/include/blkid -I/usr/include/glib-2.0 -I/usr/lib/x86_64-linux-gnu/glib-2.0/include -o ovpn-client-debug ovpn_client.c -lgtk-3 -lgdk-3 -lpangocairo-1.0 -lpango-1.0 -lharfbuzz -latk-1.0 -lcairo-gobject -lcairo -lgdk_pixbuf-2.0 -lgio-2.0 -lgobject-2.0 -lglib-2.0 -lnm -lgio-2.0 -lgobject-2.0 -lglib-2.0 -layatana-appindicator3 -layatana-indicator3 -layatana-ido3-0.4 -ldbusmenu-glib -lgtk-3 -lgdk-3 -lpangocairo-1.0 -lpango-1.0 -lharfbuzz -latk-1.0 -lcairo-gobject -lcairo -lgdk_pixbuf-2.0 -lgio-2.0 -lgobject-2.0 -lglib-2.0 -luuid -lm
-[0;32m[SUCCESS][0m Debug build completed successfully
+[0;34m[INFO][0m Compiling source files...
+[0;34m[INFO][0m Linking objects...
+[0;32m[SUCCESS][0m Build completed successfully (build/ovpn-client)
 [0;32m[SUCCESS][0m Build script completed successfully
 [0;34m[INFO][0m Log file: build.log
 [0;34m[INFO][0m Next steps:
@@ -31,4 +29,4 @@ Build started at 2025年 09月 23日 星期二 17:32:06 CST
 [0;34m[INFO][0m GUI Troubleshooting:
 [0;34m[INFO][0m   Check display: echo $DISPLAY
 [0;34m[INFO][0m   Run in debug mode: ./build.sh --debug --run
-[0;34m[INFO][0m   Check log file: /tmp/ovpn_importer.log
+[0;34m[INFO][0m   Check log file: /tmp/ovpn_client.log

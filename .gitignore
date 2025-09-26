@@ -1,3 +1,6 @@
 ovpn-client
 ovpn-client.desktop
-.vscode
+build.log
+build/
+
+
