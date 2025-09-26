@@ -325,33 +325,3 @@ void add_connection_done(GObject *source_obj, GAsyncResult *res, gpointer user_d
     log_message("INFO", "VPN connection saved to NetworkManager successfully.");
 }
 
-// 连接VPN按钮回调
-void connect_vpn_clicked(GtkWidget *widget, gpointer user_data) {
-    OVPNClient *client = (OVPNClient *)user_data;
-    const char *username, *password;
-    
-    (void)widget; // 避免未使用参数警告
-    
-    if (!client->created_connection) {
-        show_notification(client, "No VPN connection available. Please create one first.", TRUE);
-        return;
-    }
-    
-    username = gtk_entry_get_text(GTK_ENTRY(client->username_entry));
-    password = gtk_entry_get_text(GTK_ENTRY(client->password_entry));
-    
-    if (client->parsed_config && client->parsed_config->auth_user_pass) {
-        if (strlen(username) == 0) {
-            show_notification(client, "Username is required for this VPN connection", TRUE);
-            return;
-        }
-        // 这里可以添加密码验证逻辑
-        (void)password; // 避免未使用变量警告
-    }
-    
-    show_notification(client, "Connecting to VPN...", FALSE);
-    gtk_label_set_text(GTK_LABEL(client->connection_status_label), "VPN Status: Connecting...");
-    gtk_widget_set_sensitive(client->connect_button, FALSE);
-    gtk_widget_set_sensitive(client->disconnect_button, FALSE);
-    activate_vpn_connection(client);
-}
