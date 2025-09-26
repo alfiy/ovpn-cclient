@@ -182,21 +182,44 @@ NMConnection* create_nm_vpn_connection(OVPNClient *client, const char *name, OVP
 void vpn_activate_done(GObject *source_obj, GAsyncResult *res, gpointer user_data)
 {
     (void)source_obj;
-    OVPNClient        *client = user_data;
-    NMActiveConnection *act;
-    GError             *error = NULL;
+    OVPNClient *client = user_data;
+    NMActiveConnection *active_connection;
+    GError *error = NULL;
 
-    act = nm_client_activate_connection_finish(client->nm_client, res, &error);
+    // 完成异步操作，获取 NMActiveConnection 对象。
+    // 关键修复：移除多余的 NULL 参数
+    active_connection = nm_client_activate_connection_finish(client->nm_client, res, &error);
+    
+    // 处理错误情况
     if (error) {
         log_message("ERROR", "Activate VPN failed: %s", error->message);
         show_notification(client, error->message, TRUE);
         g_error_free(error);
+
+        // 恢复 UI 状态，让用户可以再次尝试
+        gtk_label_set_text(GTK_LABEL(client->connection_status_label), "VPN Status: Disconnected");
         gtk_widget_set_sensitive(client->connect_button, TRUE);
+        gtk_widget_set_sensitive(client->disconnect_button, FALSE);
         return;
     }
 
-    client->active_connection = act;
-    log_message("INFO", "VPN activated successfully");
+    // 检查返回的对象是否有效
+    if (!active_connection) {
+        log_message("ERROR", "nm_client_activate_connection_finish returned a NULL object.");
+        show_notification(client, "Failed to get active connection object.", TRUE);
+        return;
+    }
+
+    log_message("INFO", "VPN activation started successfully. Active connection object: %p", active_connection);
+
+    // 将 'state-changed' 信号连接到 NMActiveConnection 对象
+    g_signal_connect(active_connection, "state-changed", G_CALLBACK(connection_state_changed_cb), client);
+
+    // 将活动连接对象保存到客户端结构体中
+    client->active_connection = active_connection;
+    
+    // 增加引用计数，确保对象在被使用时不会被过早释放
+    g_object_ref(client->active_connection);
 }
 
 // 激活vpn链接

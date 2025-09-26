@@ -490,9 +490,6 @@ static void activate(GtkApplication *app, gpointer user_data) {
     client->is_running = TRUE;
     
     log_message("INFO", "Application activation completed");
-
-     // 监听 VPN 状态变化（需要连接到 NetworkManager 信号）
-    g_signal_connect(client->nm_client, "active-connection-state-changed", G_CALLBACK(connection_state_changed_cb), client);
 }
 
 // 应用程序关闭处理
