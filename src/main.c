@@ -83,11 +83,11 @@ static gboolean validate_certificates(OVPNConfig *config) {
 
 // 断开VPN的异步回调
 static void disconnect_done(GObject *source_object, GAsyncResult *res, gpointer user_data) {
+    (void)source_object;
+    (void)res;
     OVPNClient *client = (OVPNClient *)user_data;
     GError *error = NULL;
-    gboolean result;
 
-    result = nm_client_deactivate_connection_finish(client->nm_client, res, &error);
     if (error) {
         log_message("ERROR", "Deactivate VPN failed: %s", error->message);
         show_notification(client, error->message, TRUE);
