@@ -254,9 +254,12 @@ static void import_file_clicked(GtkWidget *widget, gpointer user_data) {
 // 退出菜单项回调
 static void quit_menu_clicked(GtkWidget *widget, gpointer user_data) {
     (void)widget;
-    (void)user_data;
+    OVPNClient *client = (OVPNClient *)user_data;
+    
     log_message("INFO", "Quit requested from menu");
-    gtk_main_quit();
+    
+    // 使用 GtkApplication 的 quit 方法安全退出
+    g_application_quit(G_APPLICATION(client->app));
 }
 
 // 显示窗口菜单项回调
@@ -283,7 +286,7 @@ static gboolean on_window_delete_event(GtkWidget *widget, GdkEvent *event, gpoin
     } else {
         // 没有系统托盘时，退出应用程序
         log_message("INFO", "No system tray - quitting application");
-        gtk_main_quit();
+        g_application_quit(G_APPLICATION(client->app));
         return FALSE;
     }
 }
