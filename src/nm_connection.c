@@ -271,8 +271,9 @@ void connection_state_changed_cb(NMActiveConnection *active_connection,
     }
 }
 
-// 修改后的 add_connection_done 函数
+// 把连接存到 NM 后的回调
 void add_connection_done(GObject *source_obj, GAsyncResult *res, gpointer user_data)
+
 {
     (void)source_obj;
     OVPNClient *client = user_data;
@@ -280,30 +281,26 @@ void add_connection_done(GObject *source_obj, GAsyncResult *res, gpointer user_d
     GError *error = NULL;
 
     remote = nm_client_add_connection_finish(client->nm_client, res, &error);
+
     if (error) {
+
         log_message("ERROR", "Add connection failed: %s", error->message);
+
         show_notification(client, error->message, TRUE);
+
         g_error_free(error);
-        // 如果添加失败，连接按钮应该保持可用
+
         gtk_widget_set_sensitive(client->connect_button, TRUE);
         return;
     }
 
-    /* 1. 持久化成功，设置 created_connection */
+    // 1. 持久化成功，设置 created_connection 
     client->created_connection = NM_CONNECTION(remote);
 
+    // 2. 只有在成功保存后，才启用连接按钮
+    gtk_widget_set_sensitive(client->connect_button, TRUE);
+    show_notification(client, "VPN connection created successfully!", FALSE);
     log_message("INFO", "VPN connection saved to NetworkManager successfully.");
-    show_notification(client, "VPN connection created successfully! Attempting to connect...", FALSE);
-
-    /* 2. 在成功保存后，立即启动 VPN 连接 */
-    // 注意：这里我们不再启用 connect_button，因为我们将立即连接。
-    // 按钮状态的更新将由 connection_state_changed_cb 处理。
-    gtk_widget_set_sensitive(client->connect_button, FALSE);
-    gtk_widget_set_sensitive(client->disconnect_button, FALSE);
-    gtk_label_set_text(GTK_LABEL(client->connection_status_label), "VPN Status: Connecting...");
-    
-    // 调用激活函数
-    activate_vpn_connection(client);
 }
 
 // 连接VPN按钮回调
