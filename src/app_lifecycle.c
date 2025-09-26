@@ -4,6 +4,7 @@
 #include "../include/structs.h"
 #include "../include/ui_builder.h"
 #include "../include/app_lifecycle.h"
+#include "../include/core_logic.h"
 
 
 // 应用程序激活回调
@@ -36,6 +37,20 @@ void app_activate(GtkApplication *app, gpointer user_data) {
     
     // 创建系统托盘指示器（可选，失败不影响主程序）
     create_indicator(client);
+
+    // 扫描并填充已存在的连接列表
+    scan_nm_connections(client);
+    for (guint i = 0; i < client->existing_connections->len; i++) {
+        char *filename = g_ptr_array_index(client->existing_connections, i);
+        // 从文件名中移除 .nmconnection 后缀以美化显示
+        char *display_name = g_strdup(filename);
+        char *dot = strrchr(display_name, '.');
+        if (dot) {
+            *dot = '\0';
+        }
+        gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(client->connection_combo_box), display_name);
+        g_free(display_name);
+    }
     
     // 显示窗口
     log_message("INFO", "Showing main window...");

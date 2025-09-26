@@ -4,6 +4,64 @@
 #include "../include/log_util.h"
 #include "../include/notify.h"
 
+static void activate_connection_done(GObject *source_object, GAsyncResult *res, gpointer user_data) {
+    
+    (void)source_object;
+    OVPNClient *client = (OVPNClient *)user_data;
+    GError *error = NULL;
+
+    NMActiveConnection *active_connection = nm_client_activate_connection_finish(client->nm_client, res, &error);
+
+    if (error) {
+        log_message("ERROR", "Activation failed: %s", error->message);
+        show_notification(client, error->message, TRUE);
+        g_error_free(error);
+        
+        // 激活失败时恢复按钮状态
+        gtk_widget_set_sensitive(client->connect_button, TRUE);
+        gtk_widget_set_sensitive(client->disconnect_button, FALSE);
+        return;
+    }
+
+    client->active_connection = active_connection;
+    gtk_label_set_text(GTK_LABEL(client->connection_status_label), "VPN Status: Connected");
+    gtk_widget_set_sensitive(client->connect_button, FALSE);
+    gtk_widget_set_sensitive(client->disconnect_button, TRUE);
+    show_notification(client, "VPN connected successfully!", FALSE);
+    log_message("INFO", "VPN connected successfully");
+}
+
+// 激活vpn链接
+void activate_vpn_connection(OVPNClient *client, const char *connection_name) {
+    NMConnection *nm_connection = NULL;
+    
+    log_message("INFO", "Looking for connection '%s'...", connection_name);
+    
+    // 直接使用 NMConnection* 接收返回值，避免不必要的类型转换
+    nm_connection = NM_CONNECTION(nm_client_get_connection_by_id(client->nm_client, connection_name));
+
+    if (!nm_connection) {
+        log_message("ERROR", "Connection '%s' not found.", connection_name);
+        show_notification(client, "VPN connection not found.", TRUE);
+        
+        // 找不到连接时恢复按钮状态
+        gtk_widget_set_sensitive(client->connect_button, TRUE);
+        gtk_widget_set_sensitive(client->disconnect_button, FALSE);
+        return;
+    }
+
+    log_message("INFO", "Activating connection '%s'...", connection_name);
+    
+    // 调用激活函数
+    nm_client_activate_connection_async(client->nm_client, nm_connection, NULL, NULL, NULL, activate_connection_done, client);
+    
+    // 激活成功后，立即释放对 nm_connection 的引用，防止内存泄漏
+    g_object_unref(nm_connection);
+    
+    gtk_label_set_text(GTK_LABEL(client->connection_status_label), "VPN Status: Connecting...");
+}
+
+
 // 创建NetworkManager VPN连接
 NMConnection* create_nm_vpn_connection(OVPNClient *client, const char *name, OVPNConfig *config) {
     NMConnection *connection;
@@ -221,24 +279,6 @@ void vpn_activate_done(GObject *source_obj, GAsyncResult *res, gpointer user_dat
     g_object_ref(client->active_connection);
 }
 
-// 激活vpn链接
-void activate_vpn_connection(OVPNClient *client)
-{
-    g_return_if_fail(client != NULL);
-    g_return_if_fail(client->nm_client != NULL);
-    g_return_if_fail(client->created_connection != NULL);
-
-    log_message("INFO", "Activating existing VPN connection...");
-
-    nm_client_activate_connection_async(
-        client->nm_client,
-        client->created_connection,   // 已存在的 connection
-        NULL,                         // device（NULL = 自动选择）
-        NULL,                         // specific object path（NULL = 默认）
-        NULL,                         // cancellable
-        vpn_activate_done,            // 回调函数
-        client);
-}
 
 
 // VPN连接状态变化回调

@@ -89,6 +89,9 @@ typedef struct {
     
     GPtrArray *vpn_connections;
     gboolean is_running;
+    GtkWidget *connection_combo_box; // 用于显示已存在的连接文件
+    GPtrArray *existing_connections; // 存储已扫描的连接文件名
+
 } OVPNClient;
 
 #endif

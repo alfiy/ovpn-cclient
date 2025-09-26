@@ -8,6 +8,8 @@
         "app-indicator.h": "c",
         "structs.h": "c",
         "ui_builder.h": "c",
-        "nm_connection.h": "c"
+        "nm_connection.h": "c",
+        "compare": "c",
+        "type_traits": "c"
     }
 }

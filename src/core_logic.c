@@ -12,8 +12,6 @@
 #include "../include/ui_callbacks.h"
 
 
-
-
 // 验证证书文件
 gboolean validate_certificates(OVPNConfig *config) {
     gboolean valid = TRUE;
@@ -109,4 +107,44 @@ gboolean test_connection(const char *server, int port, const char *proto) {
 
     close(sock);
     return success;
+}
+
+/**
+ * 扫描指定目录下的.nmconnection文件，并将文件名添加到列表中。
+ */
+void scan_nm_connections(OVPNClient *client) {
+    const GPtrArray *connections;
+    guint i;
+
+    // 如果之前的列表存在，先释放它
+    if (client->existing_connections) {
+        g_ptr_array_free(client->existing_connections, TRUE);
+    }
+    client->existing_connections = g_ptr_array_new();
+
+    log_message("INFO", "Fetching existing NetworkManager connections...");
+
+    // 使用 nm_client_get_connections() 获取所有连接
+    connections = nm_client_get_connections(client->nm_client);
+    if (!connections) {
+        log_message("WARNING", "No connections found or failed to retrieve.");
+        return;
+    }
+
+    // 遍历所有连接
+    for (i = 0; i < connections->len; i++) {
+        NMConnection *connection = g_ptr_array_index(connections, i);
+        const char *id = nm_connection_get_id(connection);
+        const char *connection_type = nm_connection_get_connection_type(connection);
+        
+        // 过滤出类型为 'vpn' 的连接
+        if (g_strcmp0(connection_type, "vpn") == 0) {
+            log_message("INFO", "Found VPN connection: %s", id);
+            g_ptr_array_add(client->existing_connections, g_strdup(id));
+        }
+    }
+    // 在 unref 之前，将 const 指针转换为非 const，消除警告
+    g_ptr_array_unref((GPtrArray *)connections);
+
+    log_message("INFO", "Finished scanning. Found %d VPN connection(s).", client->existing_connections->len);
 }

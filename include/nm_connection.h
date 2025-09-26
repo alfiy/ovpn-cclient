@@ -8,7 +8,7 @@
 
 
 NMConnection* create_nm_vpn_connection(OVPNClient *client, const char *name, OVPNConfig *config);
-void activate_vpn_connection(OVPNClient *client);
+void activate_vpn_connection(OVPNClient *client, const char *connection_name);
 void vpn_activate_done(GObject *source_obj, GAsyncResult *res, gpointer user_data);
 void connection_state_changed_cb(NMActiveConnection *active_connection,
                                         guint state,

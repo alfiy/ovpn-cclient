@@ -6,5 +6,5 @@
 
 gboolean validate_certificates(OVPNConfig *config);
 gboolean test_connection(const char *server, int port, const char *proto);
-
+void scan_nm_connections(OVPNClient *client);
 #endif

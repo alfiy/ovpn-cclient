@@ -33,6 +33,11 @@ void create_main_window(OVPNClient *client) {
     g_signal_connect(button, "clicked", G_CALLBACK(import_file_clicked), client);
     gtk_box_pack_start(GTK_BOX(hbox), button, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(main_vbox), hbox, FALSE, FALSE, 0);
+
+    // 创建一个新的 GtkComboBoxText 来显示已有的连接
+    client->connection_combo_box = gtk_combo_box_text_new();
+    gtk_widget_set_tooltip_text(client->connection_combo_box, "Select an existing VPN connection");
+    gtk_box_pack_start(GTK_BOX(main_vbox), client->connection_combo_box, FALSE, FALSE, 5);
     
     // 状态标签
     client->status_label = gtk_label_new("No file imported yet.");
@@ -88,7 +93,7 @@ void create_main_window(OVPNClient *client) {
     g_signal_connect(client->test_button, "clicked", G_CALLBACK(test_connection_clicked), client);
     gtk_widget_set_no_show_all(client->test_button, TRUE);
     gtk_box_pack_start(GTK_BOX(hbox), client->test_button, FALSE, FALSE, 0);
-    
+
     client->connect_button = gtk_button_new_with_label("Connect to VPN");
     g_signal_connect(client->connect_button, "clicked", G_CALLBACK(connect_vpn_clicked), client);
     gtk_widget_set_sensitive(client->connect_button, FALSE);

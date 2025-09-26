@@ -138,32 +138,57 @@ void test_connection_clicked(GtkWidget *widget, gpointer user_data) {
 // 连接VPN按钮回调
 void connect_vpn_clicked(GtkWidget *widget, gpointer user_data) {
     OVPNClient *client = (OVPNClient *)user_data;
-    const char *username, *password;
-    
+    const char *username = NULL;
+    const char *password = NULL;
+    const char *connection_name = NULL;
+
     (void)widget; // 避免未使用参数警告
+    (void)password;
+
+    // 1. 优先检查：是否从下拉列表中选择了已存在的连接
+    gint active_item = gtk_combo_box_get_active(GTK_COMBO_BOX(client->connection_combo_box));
+    if (active_item != -1 && active_item < client->existing_connections->len) {
+        connection_name = g_ptr_array_index(client->existing_connections, active_item);
+        log_message("INFO", "Selected existing connection from dropdown: %s", connection_name);
+    } 
     
-    if (!client->created_connection) {
-        show_notification(client, "No VPN connection available. Please create one first.", TRUE);
-        return;
+    // 2. 次要检查：是否通过导入 .ovpn 文件创建了临时连接
+    else if (client->created_connection) {
+        // 使用创建的临时连接的名称
+        connection_name = nm_connection_get_id(client->created_connection);
+        log_message("INFO", "Using temporary connection created from .ovpn file: %s", connection_name);
+    } 
+    
+    // 3. 最后检查：文本输入框中是否有连接名称
+    else {
+        connection_name = gtk_entry_get_text(GTK_ENTRY(client->name_entry));
+        if (strlen(connection_name) == 0) {
+            show_notification(client, "No VPN connection available. Please create one, select an existing one, or enter a name.", TRUE);
+            return;
+        }
+        log_message("INFO", "Using connection name from entry field: %s", connection_name);
     }
-    
+
+    // 获取用户名和密码
     username = gtk_entry_get_text(GTK_ENTRY(client->username_entry));
     password = gtk_entry_get_text(GTK_ENTRY(client->password_entry));
-    
+
+    // 根据解析出的配置文件检查是否需要用户名/密码
     if (client->parsed_config && client->parsed_config->auth_user_pass) {
         if (strlen(username) == 0) {
             show_notification(client, "Username is required for this VPN connection", TRUE);
             return;
         }
-        // 这里可以添加密码验证逻辑
-        (void)password; // 避免未使用变量警告
     }
-    
+
+    // UI 状态更新
     show_notification(client, "Connecting to VPN...", FALSE);
     gtk_label_set_text(GTK_LABEL(client->connection_status_label), "VPN Status: Connecting...");
     gtk_widget_set_sensitive(client->connect_button, FALSE);
     gtk_widget_set_sensitive(client->disconnect_button, FALSE);
-    activate_vpn_connection(client);
+    
+    // 调用 NM 模块中的连接激活函数
+    activate_vpn_connection(client, connection_name);
 }
 
 // 断开VPN按钮回调
