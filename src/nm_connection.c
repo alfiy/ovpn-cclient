@@ -187,7 +187,6 @@ void vpn_activate_done(GObject *source_obj, GAsyncResult *res, gpointer user_dat
     GError *error = NULL;
 
     // 完成异步操作，获取 NMActiveConnection 对象。
-    // 关键修复：移除多余的 NULL 参数
     active_connection = nm_client_activate_connection_finish(client->nm_client, res, &error);
     
     // 处理错误情况
