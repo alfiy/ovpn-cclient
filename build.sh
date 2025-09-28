@@ -319,19 +319,62 @@ test_compilation() {
 # Function to install the application
 install_app() {
     log_info "Installing application..."
-    
-    if [ ! -f "$PROJECT_NAME" ]; then
-        log_error "Executable '$PROJECT_NAME' not found. Build first."
+
+    local target="$BUILD_DIR/$PROJECT_NAME"
+    local desktop_file="ovpn-client.desktop"
+    local icon_file="icons8-openvpn-48.png"
+    local icon_target="/usr/share/pixmaps/$icon_file"
+
+    # 检查可执行文件
+    if [ ! -f "$target" ]; then
+        log_error "Executable '$target' not found. Build first."
         return 1
     fi
-    
-    if sudo cp "$PROJECT_NAME" /usr/local/bin/; then
-        log_success "Installation completed to /usr/local/bin/$PROJECT_NAME"
-        return 0
+
+    # 安装可执行文件
+    if sudo cp "$target" /usr/local/bin/; then
+        log_success "Installed to /usr/local/bin/$PROJECT_NAME"
     else
-        log_error "Installation failed"
+        log_error "Failed to install binary."
         return 1
     fi
+
+    # 安装图标
+    if [ -f "$icon_file" ]; then
+        if sudo cp "$icon_file" "$icon_target"; then
+            log_success "Copied icon to $icon_target"
+        else
+            log_error "Failed to copy icon to $icon_target"
+        fi
+    else
+        log_warning "$icon_file not found in project root, skipping icon installation"
+    fi
+
+    # 自动生成 .desktop 文件到当前目录，设置 Icon 路径
+    cat > "$desktop_file" <<EOF
+[Desktop Entry]
+Type=Application
+Name=OVPN Client
+Comment=OpenVPN GUI client with NetworkManager
+Exec=/usr/local/bin/ovpn-client
+Icon=$icon_target
+Terminal=false
+Categories=Network;
+EOF
+    log_info "Generated $desktop_file"
+
+    # 安装 desktop 文件
+    if sudo cp "$desktop_file" /usr/share/applications/; then
+        sudo update-desktop-database /usr/share/applications/ 2>/dev/null || true
+        log_success "Desktop launcher installed: $desktop_file"
+    else
+        log_error "Failed to install desktop file."
+    fi
+
+    # 可选：清理当前目录生成的 desktop 文件
+    rm -f "$desktop_file"
+
+    return 0
 }
 
 # Function to run the application

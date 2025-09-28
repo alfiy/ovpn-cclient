@@ -15,6 +15,7 @@
 
 // 删除配置按钮回调
 void delete_vpn_clicked(GtkWidget *widget, gpointer user_data) {
+    (void)widget;
     OVPNClient *client = (OVPNClient *)user_data;
     if (!client || !client->connection_combo_box || !client->existing_connections) {
         show_notification(client, "Internal error: No connection selected.", TRUE);
@@ -396,7 +397,8 @@ static void delete_nmcli_vpn_by_name(const char *connection_name)
 {
     char command[256];
     snprintf(command, sizeof(command), "nmcli connection delete \"%s\"", connection_name);
-    system(command);
+    int _unused_ret = system(command);
+    (void)_unused_ret;
 }
 
 void file_chosen_cb(GtkWidget *dialog, gint response_id, gpointer user_data) {
