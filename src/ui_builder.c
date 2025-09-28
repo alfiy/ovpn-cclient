@@ -152,7 +152,7 @@ gboolean create_indicator(OVPNClient *client) {
     log_message("INFO", "Creating system tray indicator...");
     
     client->indicator = app_indicator_new(APP_ID,
-                                        "network-vpn",
+                                        "network-vpn", /* 初始名随便 */
                                         APP_INDICATOR_CATEGORY_SYSTEM_SERVICES);
     
     if (!client->indicator) {
@@ -161,7 +161,12 @@ gboolean create_indicator(OVPNClient *client) {
     }
     
     app_indicator_set_status(client->indicator, APP_INDICATOR_STATUS_ACTIVE);
-    app_indicator_set_attention_icon(client->indicator, "network-vpn-acquiring");
+    
+    // 设置系统托盘图标
+    app_indicator_set_icon_full(client->indicator, "/usr/share/pixmaps/icons8-openvpn-48.png", "OVPN Client Tray Icon");
+
+    // 可选：设置关注状态图标
+    app_indicator_set_attention_icon_full(client->indicator, "/usr/share/pixmaps/icons8-openvpn-48.png", "OVPN Client Attention");
     
     // 创建菜单
     client->indicator_menu = gtk_menu_new();
