@@ -340,10 +340,37 @@ void refresh_connection_combo_box(OVPNClient *client) {
     }
 }
 
-// 文件选择对话框回调 - 直接替换你的 file_chosen_cb
+// 查找VPN连接是否同名，并返回UUID（用于后续覆盖配置）
+static gboolean find_nmcli_vpn_uuid(const char *connection_name, char *found_uuid, size_t uuid_buf_size)
+{
+    FILE *fp = popen("nmcli -t -f NAME,UUID,TYPE connection show", "r");
+    if (!fp) return FALSE;
+    char line[512];
+    gboolean found = FALSE;
+    while (fgets(line, sizeof(line), fp)) {
+        char *name = strtok(line, ":");
+        char *uuid = strtok(NULL, ":");
+        char *type = strtok(NULL, "\n");
+        if (type && strcmp(type, "vpn") == 0 && name && strcmp(name, connection_name) == 0) {
+            if (uuid && found_uuid)
+                strncpy(found_uuid, uuid, uuid_buf_size - 1);
+            found = TRUE;
+            break;
+        }
+    }
+    pclose(fp);
+    return found;
+}
+
+static void delete_nmcli_vpn_by_name(const char *connection_name)
+{
+    char command[256];
+    snprintf(command, sizeof(command), "nmcli connection delete \"%s\"", connection_name);
+    system(command);
+}
+
 void file_chosen_cb(GtkWidget *dialog, gint response_id, gpointer user_data) {
     OVPNClient *client = (OVPNClient *)user_data;
-
     if (!client) {
         log_message("ERROR", "Invalid client in file_chosen_cb");
         if (dialog) gtk_widget_destroy(dialog);
@@ -367,7 +394,6 @@ void file_chosen_cb(GtkWidget *dialog, gint response_id, gpointer user_data) {
                 safe_free_ovpn_config(client->parsed_config);
                 client->parsed_config = NULL;
             }
-
             client->parsed_config = parse_ovpn_file(filename);
 
             if (client->parsed_config) {
@@ -379,7 +405,6 @@ void file_chosen_cb(GtkWidget *dialog, gint response_id, gpointer user_data) {
                     if (client->status_label) {
                         gtk_label_set_text(GTK_LABEL(client->status_label), status_text);
                     }
-
                     size_t basename_len = strlen(basename);
                     if (basename_len > 5) { // .ovpn扩展名
                         char *name_without_ext = g_strndup(basename, basename_len - 5);
@@ -388,47 +413,50 @@ void file_chosen_cb(GtkWidget *dialog, gint response_id, gpointer user_data) {
                         }
                         g_free(name_without_ext);
                     }
-
-                    if (validate_certificates(client->parsed_config)) {
-                        const char *connection_name = NULL;
-                        if (client->name_entry) {
-                            connection_name = gtk_entry_get_text(GTK_ENTRY(client->name_entry));
-                        }
-
-                        if (connection_name && strlen(connection_name) > 0) {
-                            // 保证 existing_connections 初始化
-                            if (!client->existing_connections) {
-                                client->existing_connections = g_ptr_array_new_with_free_func(g_free);
-                            }
-                            // 查重，避免重复加入
-                            gboolean exists = FALSE;
-                            for (guint i = 0; i < client->existing_connections->len; i++) {
-                                if (strcmp(connection_name, (char*)g_ptr_array_index(client->existing_connections, i)) == 0) {
-                                    exists = TRUE;
-                                    break;
-                                }
-                            }
-                            if (!exists) {
-                                g_ptr_array_add(client->existing_connections, g_strdup(connection_name));
-                            }
-                            // 刷新ComboBox并选中新项
-                            refresh_connection_combo_box(client);
-                            gtk_combo_box_set_active(GTK_COMBO_BOX(client->connection_combo_box), client->existing_connections->len - 1);
-
-                            NMConnection *new_connection = create_nm_vpn_connection(client, connection_name, client->parsed_config);
-                            if (new_connection) {
-                                nm_client_add_connection_async(client->nm_client, new_connection,
-                                                               TRUE, NULL, add_connection_done, client);
-                                g_object_unref(new_connection);
-                                show_notification(client, "VPN connection created successfully!", FALSE);
-                            } else {
-                                show_notification(client, "Failed to create VPN connection", TRUE);
-                            }
-                        }
-                    }
                     g_free(basename);
+                }
+
+                if (validate_certificates(client->parsed_config)) {
+                    const char *connection_name = NULL;
+                    if (client->name_entry) {
+                        connection_name = gtk_entry_get_text(GTK_ENTRY(client->name_entry));
+                    }
+                    if (connection_name && strlen(connection_name) > 0) {
+                        char existing_uuid[128] = {0};
+                        gboolean exists = find_nmcli_vpn_uuid(connection_name, existing_uuid, sizeof(existing_uuid));
+                        char command[1024];
+                        int ret;
+
+                        if (exists) {
+                            // 旧版本 nmcli 不支持 --update，需先删除再导入
+                            delete_nmcli_vpn_by_name(connection_name); // 删除已有连接
+                            snprintf(command, sizeof(command),
+                                "nmcli connection import type openvpn file '%s'", filename);
+                            ret = system(command);
+                            if (ret == 0)
+                                show_notification(client, "VPN configuration updated successfully!", FALSE);
+                            else
+                                show_notification(client, "Failed to update VPN configuration!", TRUE);
+                            log_message("INFO", "Overwrote existing VPN connection: %s (UUID=%s), status=%d",
+                                        connection_name, existing_uuid, ret);
+                        } else {
+                            // 新建VPN
+                            snprintf(command, sizeof(command),
+                                "nmcli connection import type openvpn file '%s'", filename);
+                            ret = system(command);
+                            if (ret == 0)
+                                show_notification(client, "VPN connection imported successfully!", FALSE);
+                            else
+                                show_notification(client, "Failed to import VPN connection!", TRUE);
+                            log_message("INFO", "Imported new VPN connection: %s, status=%d",
+                                        connection_name, ret);
+                        }
+
+                        // 刷新下拉框
+                        scanned_connections_cb(NULL, NULL, client);
+                    }
                 } else {
-                    log_message("ERROR", "Failed to get basename from filename");
+                    show_notification(client, "Failed to validate certificate", TRUE);
                 }
             } else {
                 show_notification(client, "Failed to parse OVPN file", TRUE);
@@ -439,6 +467,7 @@ void file_chosen_cb(GtkWidget *dialog, gint response_id, gpointer user_data) {
 
     if (dialog) gtk_widget_destroy(dialog);
 }
+
 
 // 退出菜单项回调
 void quit_menu_clicked(GtkWidget *widget, gpointer user_data) {
