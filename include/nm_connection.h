@@ -16,7 +16,8 @@ void connection_state_changed_cb(NMActiveConnection *active_connection,
                                         gpointer user_data);
 
 void add_connection_done(GObject *source_obj, GAsyncResult *res, gpointer user_data);
-
+void scanned_connections_cb(GObject *source_object, GAsyncResult *res, gpointer user_data);
+void scan_existing_connections(OVPNClient *client);
 
 #endif
 

@@ -4,6 +4,82 @@
 #include "../include/log_util.h"
 #include "../include/notify.h"
 
+
+// 扫描所有已保存的连接的回调函数
+void scanned_connections_cb(GObject *source_object, GAsyncResult *res, gpointer user_data) {
+    OVPNClient *app = (OVPNClient *)user_data;
+    GError *error = NULL;
+    char **failures = NULL;
+
+    gboolean success = nm_client_load_connections_finish(
+        NM_CLIENT(source_object),
+        &failures,
+        res,
+        &error
+    );
+
+    gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(app->connection_combo_box));
+
+    if (!success) {
+        log_message("ERROR", "Failed to get connections: %s", error ? error->message : "Unknown error");
+        if (error) g_error_free(error);
+
+        gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(app->connection_combo_box),
+                                       "Failed to load connections");
+        gtk_combo_box_set_active(GTK_COMBO_BOX(app->connection_combo_box), 0);
+        gtk_widget_set_sensitive(app->connection_combo_box, FALSE);
+        gtk_widget_set_sensitive(app->connect_button, FALSE);
+        return;
+    }
+
+    if (app->existing_connections) {
+        g_ptr_array_unref(app->existing_connections);
+    }
+    app->existing_connections = g_ptr_array_new_with_free_func(g_free);
+
+    const GPtrArray *all_connections = nm_client_get_connections(app->nm_client);
+
+    gint count = 0;
+    for (guint i = 0; i < all_connections->len; i++) {
+        NMConnection *connection = g_ptr_array_index(all_connections, i);
+        if (nm_connection_get_setting_by_name(connection, "vpn")) {
+            const char *connection_name = nm_connection_get_id(connection);
+            g_ptr_array_add(app->existing_connections, g_strdup(connection_name));
+            gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(app->connection_combo_box), connection_name);
+            count++;
+        }
+    }
+
+    log_message("INFO", "Finished scanning. Found %d VPN connection(s).", count);
+
+    if (app->existing_connections->len > 0) {
+        gtk_combo_box_set_active(GTK_COMBO_BOX(app->connection_combo_box), 0);
+        gtk_widget_set_sensitive(app->connect_button, TRUE);
+        gtk_widget_set_sensitive(app->connection_combo_box, TRUE);
+    } else {
+        gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(app->connection_combo_box),
+                                       "No saved connections found");
+        gtk_combo_box_set_active(GTK_COMBO_BOX(app->connection_combo_box), 0);
+        gtk_widget_set_sensitive(app->connection_combo_box, FALSE);
+        gtk_widget_set_sensitive(app->connect_button, FALSE);
+    }
+
+    if (failures) {
+        g_strfreev(failures);
+    }
+}
+
+void scan_existing_connections(OVPNClient *client) {
+    log_message("INFO", "Fetching existing NetworkManager connections...");
+    nm_client_load_connections_async(
+        client->nm_client,
+        NULL,                      // reload 参数
+        NULL,                      // GCancellable
+        scanned_connections_cb,    // 回调
+        client                     // 用户数据
+    );
+}
+
 static void activate_connection_done(GObject *source_object, GAsyncResult *res, gpointer user_data) {
     
     (void)source_object;
@@ -32,33 +108,59 @@ static void activate_connection_done(GObject *source_object, GAsyncResult *res, 
 }
 
 // 激活vpn链接
+/**
+ * @brief Activates a VPN connection by its ID.
+ *
+ * This function finds a connection by its ID and attempts to activate it using
+ * the NetworkManager client.
+ *
+ * @param client The application client context.
+ * @param connection_name The ID of the connection to activate.
+ */
 void activate_vpn_connection(OVPNClient *client, const char *connection_name) {
-    NMConnection *nm_connection = NULL;
-    
-    log_message("INFO", "Looking for connection '%s'...", connection_name);
-    
-    // 直接使用 NMConnection* 接收返回值，避免不必要的类型转换
-    nm_connection = NM_CONNECTION(nm_client_get_connection_by_id(client->nm_client, connection_name));
+    if (!client || !client->nm_client || !connection_name) {
+        log_message("ERROR", "Invalid arguments for activating connection.");
+        return;
+    }
 
-    if (!nm_connection) {
-        log_message("ERROR", "Connection '%s' not found.", connection_name);
-        show_notification(client, "VPN connection not found.", TRUE);
-        
-        // 找不到连接时恢复按钮状态
+    log_message("INFO", "Looking for connection '%s'...", connection_name);
+
+    // 根据你系统上的 libnm 版本，nm_client_get_connection_by_id 只接受两个参数。
+    // 它返回 NMRemoteConnection* 类型。
+    NMRemoteConnection *nm_connection_remote = nm_client_get_connection_by_id(client->nm_client, connection_name);
+
+    if (!nm_connection_remote) {
+        log_message("ERROR", "Failed to find connection '%s'.", connection_name);
+        show_notification(client, "Error: VPN connection not found.", TRUE);
         gtk_widget_set_sensitive(client->connect_button, TRUE);
         gtk_widget_set_sensitive(client->disconnect_button, FALSE);
         return;
     }
+    
+    // 尽管 nm_client_activate_connection_async() 的第一个参数是 NMConnection*，
+    // 但 NMRemoteConnection 继承自 NMConnection，因此可以直接传递，无需显式转换。
+    // 这将消除类型不匹配的警告。
+    NMConnection *nm_connection = NM_CONNECTION(nm_connection_remote);
 
     log_message("INFO", "Activating connection '%s'...", connection_name);
     
-    // 调用激活函数
-    nm_client_activate_connection_async(client->nm_client, nm_connection, NULL, NULL, NULL, activate_connection_done, client);
-    
-    // 激活成功后，立即释放对 nm_connection 的引用，防止内存泄漏
-    g_object_unref(nm_connection);
-    
+    // UI 状态更新
     gtk_label_set_text(GTK_LABEL(client->connection_status_label), "VPN Status: Connecting...");
+    gtk_widget_set_sensitive(client->connect_button, FALSE);
+    gtk_widget_set_sensitive(client->disconnect_button, FALSE);
+
+    nm_client_activate_connection_async(
+        client->nm_client,
+        nm_connection,
+        NULL,
+        NULL,
+        NULL,
+        activate_connection_done,
+        client
+    );
+    
+    // nm_client_activate_connection_async 已经增加了引用计数，
+    // 所以在 activate_connection_done 中释放是安全的。
 }
 
 

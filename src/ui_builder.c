@@ -38,7 +38,10 @@ void create_main_window(OVPNClient *client) {
     client->connection_combo_box = gtk_combo_box_text_new();
     gtk_widget_set_tooltip_text(client->connection_combo_box, "Select an existing VPN connection");
     gtk_box_pack_start(GTK_BOX(main_vbox), client->connection_combo_box, FALSE, FALSE, 5);
-    
+    // 连接 "changed" 信号到新的回调函数
+    g_signal_connect(client->connection_combo_box, "changed", G_CALLBACK(on_connection_selected), client);
+
+
     // 状态标签
     client->status_label = gtk_label_new("No file imported yet.");
     gtk_widget_set_halign(client->status_label, GTK_ALIGN_START);
