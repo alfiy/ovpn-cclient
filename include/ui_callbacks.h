@@ -16,4 +16,6 @@ void show_window_clicked(GtkWidget *widget, gpointer user_data);
 void connect_vpn_clicked(GtkWidget *widget, gpointer user_data);
 void on_connection_selected(GtkWidget *widget, gpointer user_data);
 
+void refresh_connection_combo_box(OVPNClient *client);
+
 #endif

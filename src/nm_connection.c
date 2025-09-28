@@ -7,65 +7,57 @@
 
 // 扫描所有已保存的连接的回调函数
 void scanned_connections_cb(GObject *source_object, GAsyncResult *res, gpointer user_data) {
+    (void)source_object;
+    (void)res;
     OVPNClient *app = (OVPNClient *)user_data;
-    GError *error = NULL;
-    char **failures = NULL;
 
-    gboolean success = nm_client_load_connections_finish(
-        NM_CLIENT(source_object),
-        &failures,
-        res,
-        &error
-    );
-
+    // 清空下拉列表
     gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(app->connection_combo_box));
 
-    if (!success) {
-        log_message("ERROR", "Failed to get connections: %s", error ? error->message : "Unknown error");
-        if (error) g_error_free(error);
+    // 清空并新建连接数组
+    if (app->existing_connections) {
+        g_ptr_array_unref(app->existing_connections);
+    }
+    app->existing_connections = g_ptr_array_new_with_free_func(g_free);
 
+    // 调用 nmcli 命令并解析输出
+    FILE *fp = popen("nmcli -t -f NAME,TYPE connection show", "r");
+    if (!fp) {
         gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(app->connection_combo_box),
-                                       "Failed to load connections");
+                                      "Failed to run nmcli");
         gtk_combo_box_set_active(GTK_COMBO_BOX(app->connection_combo_box), 0);
         gtk_widget_set_sensitive(app->connection_combo_box, FALSE);
         gtk_widget_set_sensitive(app->connect_button, FALSE);
         return;
     }
 
-    if (app->existing_connections) {
-        g_ptr_array_unref(app->existing_connections);
-    }
-    app->existing_connections = g_ptr_array_new_with_free_func(g_free);
-
-    const GPtrArray *all_connections = nm_client_get_connections(app->nm_client);
-
+    char line[256];
     gint count = 0;
-    for (guint i = 0; i < all_connections->len; i++) {
-        NMConnection *connection = g_ptr_array_index(all_connections, i);
-        if (nm_connection_get_setting_by_name(connection, "vpn")) {
-            const char *connection_name = nm_connection_get_id(connection);
-            g_ptr_array_add(app->existing_connections, g_strdup(connection_name));
-            gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(app->connection_combo_box), connection_name);
+    while (fgets(line, sizeof(line), fp)) {
+        // 截取 NAME:TYPE 格式的数据
+        char *name = strtok(line, ":");
+        char *type = strtok(NULL, "\n");
+        if (type && strcmp(type, "vpn") == 0 && name && strlen(name) > 0) {
+            g_ptr_array_add(app->existing_connections, g_strdup(name));
+            gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(app->connection_combo_box), name);
             count++;
         }
     }
+    pclose(fp);
 
-    log_message("INFO", "Finished scanning. Found %d VPN connection(s).", count);
+    // 日志
+    log_message("INFO", "Found %d VPN connection(s) via nmcli command.", count);
 
-    if (app->existing_connections->len > 0) {
+    if (count > 0) {
         gtk_combo_box_set_active(GTK_COMBO_BOX(app->connection_combo_box), 0);
         gtk_widget_set_sensitive(app->connect_button, TRUE);
         gtk_widget_set_sensitive(app->connection_combo_box, TRUE);
     } else {
         gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(app->connection_combo_box),
-                                       "No saved connections found");
+                                      "No saved VPN connections found");
         gtk_combo_box_set_active(GTK_COMBO_BOX(app->connection_combo_box), 0);
         gtk_widget_set_sensitive(app->connection_combo_box, FALSE);
         gtk_widget_set_sensitive(app->connect_button, FALSE);
-    }
-
-    if (failures) {
-        g_strfreev(failures);
     }
 }
 

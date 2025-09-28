@@ -330,23 +330,29 @@ void disconnect_vpn_clicked(GtkWidget *widget, gpointer user_data) {
     // 注意：不要在这里设置 active_connection = NULL，等异步回调完成
 }
 
-// 文件选择对话框回调 - 修复内存管理
+// 封装：刷新下拉列表函数
+void refresh_connection_combo_box(OVPNClient *client) {
+    if (!client || !client->connection_combo_box || !client->existing_connections) return;
+    GtkComboBoxText *combo = GTK_COMBO_BOX_TEXT(client->connection_combo_box);
+    gtk_combo_box_text_remove_all(combo);
+    for (guint i = 0; i < client->existing_connections->len; i++) {
+        gtk_combo_box_text_append_text(combo, (char*)g_ptr_array_index(client->existing_connections, i));
+    }
+}
+
+// 文件选择对话框回调 - 直接替换你的 file_chosen_cb
 void file_chosen_cb(GtkWidget *dialog, gint response_id, gpointer user_data) {
     OVPNClient *client = (OVPNClient *)user_data;
 
-    // 添加空指针检查
     if (!client) {
         log_message("ERROR", "Invalid client in file_chosen_cb");
-        if (dialog) {
-            gtk_widget_destroy(dialog);
-        }
+        if (dialog) gtk_widget_destroy(dialog);
         return;
     }
 
     if (response_id == GTK_RESPONSE_ACCEPT) {
         char *filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
         if (filename) {
-            // 安全地复制文件路径
             if (strlen(filename) < sizeof(client->ovpn_file_path)) {
                 g_strlcpy(client->ovpn_file_path, filename, sizeof(client->ovpn_file_path));
             } else {
@@ -356,29 +362,26 @@ void file_chosen_cb(GtkWidget *dialog, gint response_id, gpointer user_data) {
                 gtk_widget_destroy(dialog);
                 return;
             }
-            
-            // 正确释放之前的配置 - 修复内存管理问题
+
             if (client->parsed_config) {
-                // 使用安全的释放函数
                 safe_free_ovpn_config(client->parsed_config);
                 client->parsed_config = NULL;
             }
-            
+
             client->parsed_config = parse_ovpn_file(filename);
 
             if (client->parsed_config) {
                 char status_text[256];
                 char *basename = g_path_get_basename(filename);
-                
+
                 if (basename) {
                     snprintf(status_text, sizeof(status_text), "Imported: %s", basename);
                     if (client->status_label) {
                         gtk_label_set_text(GTK_LABEL(client->status_label), status_text);
                     }
 
-                    // 安全地处理文件名
                     size_t basename_len = strlen(basename);
-                    if (basename_len > 5) { // 确保有 .ovpn 扩展名
+                    if (basename_len > 5) { // .ovpn扩展名
                         char *name_without_ext = g_strndup(basename, basename_len - 5);
                         if (name_without_ext && client->name_entry) {
                             gtk_entry_set_text(GTK_ENTRY(client->name_entry), name_without_ext);
@@ -391,8 +394,27 @@ void file_chosen_cb(GtkWidget *dialog, gint response_id, gpointer user_data) {
                         if (client->name_entry) {
                             connection_name = gtk_entry_get_text(GTK_ENTRY(client->name_entry));
                         }
-                        
+
                         if (connection_name && strlen(connection_name) > 0) {
+                            // 保证 existing_connections 初始化
+                            if (!client->existing_connections) {
+                                client->existing_connections = g_ptr_array_new_with_free_func(g_free);
+                            }
+                            // 查重，避免重复加入
+                            gboolean exists = FALSE;
+                            for (guint i = 0; i < client->existing_connections->len; i++) {
+                                if (strcmp(connection_name, (char*)g_ptr_array_index(client->existing_connections, i)) == 0) {
+                                    exists = TRUE;
+                                    break;
+                                }
+                            }
+                            if (!exists) {
+                                g_ptr_array_add(client->existing_connections, g_strdup(connection_name));
+                            }
+                            // 刷新ComboBox并选中新项
+                            refresh_connection_combo_box(client);
+                            gtk_combo_box_set_active(GTK_COMBO_BOX(client->connection_combo_box), client->existing_connections->len - 1);
+
                             NMConnection *new_connection = create_nm_vpn_connection(client, connection_name, client->parsed_config);
                             if (new_connection) {
                                 nm_client_add_connection_async(client->nm_client, new_connection,
@@ -414,10 +436,8 @@ void file_chosen_cb(GtkWidget *dialog, gint response_id, gpointer user_data) {
             g_free(filename);
         }
     }
-    
-    if (dialog) {
-        gtk_widget_destroy(dialog);
-    }
+
+    if (dialog) gtk_widget_destroy(dialog);
 }
 
 // 退出菜单项回调
