@@ -13,6 +13,38 @@
 #include "../include/core_logic.h"
 #include "../include/config.h"
 
+// 删除配置按钮回调
+void delete_vpn_clicked(GtkWidget *widget, gpointer user_data) {
+    OVPNClient *client = (OVPNClient *)user_data;
+    if (!client || !client->connection_combo_box || !client->existing_connections) {
+        show_notification(client, "Internal error: No connection selected.", TRUE);
+        return;
+    }
+    gint active_item = gtk_combo_box_get_active(GTK_COMBO_BOX(client->connection_combo_box));
+    if (active_item < 0 || active_item >= (gint)client->existing_connections->len) {
+        show_notification(client, "No connection selected to delete.", TRUE);
+        return;
+    }
+    const char *connection_name = (const char *)g_ptr_array_index(client->existing_connections, active_item);
+    if (!connection_name || strlen(connection_name) == 0) {
+        show_notification(client, "Invalid connection name.", TRUE);
+        return;
+    }
+    // 删除连接
+    char command[256];
+    snprintf(command, sizeof(command), "nmcli connection delete \"%s\"", connection_name);
+    int ret = system(command);
+    if (ret == 0) {
+        show_notification(client, "VPN connection deleted successfully!", FALSE);
+        log_message("INFO", "VPN connection deleted: %s", connection_name);
+        // 刷新下拉框
+        scanned_connections_cb(NULL, NULL, client);
+    } else {
+        show_notification(client, "Failed to delete VPN connection.", TRUE);
+    }
+}
+
+
 // 安全释放OVPN配置的函数
 static void safe_free_ovpn_config(OVPNConfig *config) {
     if (!config) {
@@ -32,18 +64,16 @@ static void safe_free_ovpn_config(OVPNConfig *config) {
 // 当下拉列表选中项改变时触发的回调
 void on_connection_selected(GtkWidget *widget, gpointer user_data) {
     OVPNClient *client = (OVPNClient *)user_data;
-    
-    // 添加空指针检查
     if (!client || !widget) {
         log_message("ERROR", "Invalid parameters in on_connection_selected");
         return;
     }
-    
     gint active_item = gtk_combo_box_get_active(GTK_COMBO_BOX(widget));
-    if (active_item != -1) {
-        gtk_widget_set_sensitive(client->connect_button, TRUE);
-    } else {
-        gtk_widget_set_sensitive(client->connect_button, FALSE);
+    gboolean valid = (active_item != -1 && client->existing_connections &&
+                      active_item >= 0 && active_item < (gint)client->existing_connections->len);
+    gtk_widget_set_sensitive(client->connect_button, valid);
+    if (client->delete_button) {
+        gtk_widget_set_sensitive(client->delete_button, valid);
     }
 }
 

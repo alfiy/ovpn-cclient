@@ -106,6 +106,13 @@ void create_main_window(OVPNClient *client) {
     g_signal_connect(client->disconnect_button, "clicked", G_CALLBACK(disconnect_vpn_clicked), client);
     gtk_widget_set_sensitive(client->disconnect_button, FALSE);
     gtk_box_pack_start(GTK_BOX(hbox), client->disconnect_button, FALSE, FALSE, 0);
+
+    // 新增删除按钮
+    client->delete_button = gtk_button_new_with_label("Delete VPN Config");
+    g_signal_connect(client->delete_button, "clicked", G_CALLBACK(delete_vpn_clicked), client);
+    gtk_widget_set_sensitive(client->delete_button, FALSE);
+    gtk_box_pack_start(GTK_BOX(hbox), client->delete_button, FALSE, FALSE, 0);
+
     
     gtk_box_pack_start(GTK_BOX(main_vbox), hbox, FALSE, FALSE, 0);
     
