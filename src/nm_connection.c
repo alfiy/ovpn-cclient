@@ -92,7 +92,7 @@ static void activate_connection_done(GObject *source_object, GAsyncResult *res, 
     }
 
     client->active_connection = active_connection;
-    gtk_label_set_text(GTK_LABEL(client->connection_status_label), "VPN Status: Connected");
+    gtk_label_set_text(GTK_LABEL(client->connection_status_label), "VPN状态: 已连接");
     gtk_widget_set_sensitive(client->connect_button, FALSE);
     gtk_widget_set_sensitive(client->disconnect_button, TRUE);
     show_notification(client, "VPN connected successfully!", FALSE);
@@ -395,7 +395,7 @@ void connection_state_changed_cb(NMActiveConnection *active_connection,
     log_message("INFO","VPN status: %s",state);
     switch (state) {
         case NM_ACTIVE_CONNECTION_STATE_ACTIVATED:
-            gtk_label_set_text(GTK_LABEL(client->connection_status_label), "VPN Status: Connected");
+            gtk_label_set_text(GTK_LABEL(client->connection_status_label), "VPN状态: 已连接");
             gtk_widget_set_sensitive(client->connect_button, FALSE);
             gtk_widget_set_sensitive(client->disconnect_button, TRUE);
             show_notification(client, "VPN connection established!", FALSE);
@@ -404,7 +404,7 @@ void connection_state_changed_cb(NMActiveConnection *active_connection,
             break;
 
         case NM_ACTIVE_CONNECTION_STATE_DEACTIVATED:
-            gtk_label_set_text(GTK_LABEL(client->connection_status_label), "VPN Status: Disconnected");
+            gtk_label_set_text(GTK_LABEL(client->connection_status_label), "VPN状态: Disconnected");
             gtk_widget_set_sensitive(client->connect_button, TRUE);
             gtk_widget_set_sensitive(client->disconnect_button, FALSE);
             client->active_connection = NULL;
@@ -420,7 +420,7 @@ void connection_state_changed_cb(NMActiveConnection *active_connection,
             break;
             
         case NM_ACTIVE_CONNECTION_STATE_ACTIVATING:
-            gtk_label_set_text(GTK_LABEL(client->connection_status_label), "VPN Status: Connecting...");
+            gtk_label_set_text(GTK_LABEL(client->connection_status_label), "VPN状态: 正在连接...");
             gtk_widget_set_sensitive(client->connect_button, FALSE);
             gtk_widget_set_sensitive(client->disconnect_button, FALSE);
             break;

@@ -16,7 +16,7 @@ void create_main_window(OVPNClient *client) {
     log_message("INFO", "Creating main window...");
     
     client->window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-    gtk_window_set_title(GTK_WINDOW(client->window), "OVPN Client with NetworkManager");
+    gtk_window_set_title(GTK_WINDOW(client->window), "OVPN Client");
     gtk_window_set_default_size(GTK_WINDOW(client->window), 800, 600);
     gtk_container_set_border_width(GTK_CONTAINER(client->window), 10);
     
@@ -29,7 +29,7 @@ void create_main_window(OVPNClient *client) {
     
     // 导入按钮
     hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
-    button = gtk_button_new_with_label("Import .ovpn File");
+    button = gtk_button_new_with_label("导入配置文件");
     g_signal_connect(button, "clicked", G_CALLBACK(import_file_clicked), client);
     gtk_box_pack_start(GTK_BOX(hbox), button, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(main_vbox), hbox, FALSE, FALSE, 0);
@@ -54,7 +54,7 @@ void create_main_window(OVPNClient *client) {
     gtk_box_pack_start(GTK_BOX(main_vbox), client->notification_label, FALSE, FALSE, 0);
     
     // VPN连接状态
-    client->connection_status_label = gtk_label_new("VPN Status: Disconnected");
+    client->connection_status_label = gtk_label_new("VPN状态: 未连接");
     gtk_widget_set_halign(client->connection_status_label, GTK_ALIGN_START);
     gtk_box_pack_start(GTK_BOX(main_vbox), client->connection_status_label, FALSE, FALSE, 0);
     
