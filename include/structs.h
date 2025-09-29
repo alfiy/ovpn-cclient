@@ -2,6 +2,7 @@
 #define STRUCTS_H
 
 #include <glib.h>
+#include <gtk/gtk.h>
 
 #define MAX_REMOTES 10
 #define MAX_PATH 1024
@@ -17,13 +18,16 @@ typedef struct _NMActiveConnection NMActiveConnection;
 
 
 typedef struct {
-    char server[256];
+    char server[128];
     char port[16];
     char proto[16];
+    char cipher[32];
+    char tls_version[16];
+    int remote_count;
 } RemoteServer;
 
 typedef struct {
-    RemoteServer remote[MAX_REMOTES];
+    RemoteServer remote[MAX_REMOTES]; // 允许最多 MAX_REMOTES 个remote
     int remote_count;
 
     char proto[16];
@@ -66,10 +70,6 @@ typedef struct {
     GtkWidget *vpn_list_box;
     GtkWidget *vpn_count_label;
     GtkWidget *connection_status_label;
-    GtkWidget *name_entry;
-    GtkWidget *username_entry;
-    GtkWidget *password_entry;
-    GtkWidget *result_view;
     GtkWidget *connect_button;
     GtkWidget *disconnect_button;
     GtkWidget *delete_button;
@@ -91,6 +91,12 @@ typedef struct {
     gboolean is_running;
     GtkWidget *connection_combo_box; // 用于显示已存在的连接文件
     GPtrArray *existing_connections; // 存储已扫描的连接文件名
+
+    GtkWidget *config_analysis_frame; // 配置文件解析
+    GtkWidget *connection_log_frame; // 连接日志
+    GtkTextView *result_view; // 配置文件解析内容
+    GtkTextView *log_view; // 连接日志内容
+    GtkWidget *scrolled;
 } OVPNClient;
 
 #endif

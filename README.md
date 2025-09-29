@@ -56,6 +56,12 @@ chmod +x build.sh
 
 # Build, install and run
 ./build.sh --install --run
+
+# 构建 deb 包
+./build.sh --deb
+
+# 构建 debug 并打包
+./build.sh --debug --deb
 ```
 
 ### Using Makefile directly:

@@ -7,5 +7,6 @@
 
 void create_main_window(OVPNClient *client);
 gboolean create_indicator(OVPNClient *client);
+void update_config_analysis_view(OVPNClient *client);
 
 #endif

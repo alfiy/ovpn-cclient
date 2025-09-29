@@ -49,7 +49,7 @@ void app_activate(GtkApplication *app, gpointer user_data) {
     
     // 显示窗口
     log_message("INFO", "Showing main window...");
-    gtk_widget_show_all(client->window);
+    gtk_widget_show(client->window);
     
     // 确保窗口获得焦点
     gtk_window_present(GTK_WINDOW(client->window));

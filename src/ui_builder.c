@@ -11,13 +11,12 @@
 // 创建主窗口
 void create_main_window(OVPNClient *client) {
     GtkWidget *main_vbox, *hbox, *frame, *scrolled, *button;
-    GtkWidget *auth_vbox;
     
     log_message("INFO", "Creating main window...");
     
     client->window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(client->window), "OVPN Client");
-    gtk_window_set_default_size(GTK_WINDOW(client->window), 800, 600);
+    gtk_window_set_default_size(GTK_WINDOW(client->window), 400, 600);
     gtk_container_set_border_width(GTK_CONTAINER(client->window), 10);
     
     // 设置窗口关闭事件处理
@@ -58,36 +57,6 @@ void create_main_window(OVPNClient *client) {
     gtk_widget_set_halign(client->connection_status_label, GTK_ALIGN_START);
     gtk_box_pack_start(GTK_BOX(main_vbox), client->connection_status_label, FALSE, FALSE, 0);
     
-    // 连接名称输入
-    hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
-    gtk_box_pack_start(GTK_BOX(hbox), gtk_label_new("VPN Connection Name:"), FALSE, FALSE, 0);
-    client->name_entry = gtk_entry_new();
-    gtk_entry_set_placeholder_text(GTK_ENTRY(client->name_entry), "Enter connection name...");
-    gtk_box_pack_start(GTK_BOX(hbox), client->name_entry, TRUE, TRUE, 0);
-    gtk_box_pack_start(GTK_BOX(main_vbox), hbox, FALSE, FALSE, 0);
-    
-    // 认证框架
-    frame = gtk_frame_new("Authentication (if required)");
-    auth_vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
-    gtk_container_set_border_width(GTK_CONTAINER(auth_vbox), 5);
-    
-    hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
-    gtk_box_pack_start(GTK_BOX(hbox), gtk_label_new("Username:"), FALSE, FALSE, 0);
-    client->username_entry = gtk_entry_new();
-    gtk_entry_set_placeholder_text(GTK_ENTRY(client->username_entry), "VPN username (optional)");
-    gtk_box_pack_start(GTK_BOX(hbox), client->username_entry, TRUE, TRUE, 0);
-    gtk_box_pack_start(GTK_BOX(auth_vbox), hbox, FALSE, FALSE, 0);
-    
-    hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
-    gtk_box_pack_start(GTK_BOX(hbox), gtk_label_new("Password:"), FALSE, FALSE, 0);
-    client->password_entry = gtk_entry_new();
-    gtk_entry_set_placeholder_text(GTK_ENTRY(client->password_entry), "VPN password (optional)");
-    gtk_entry_set_visibility(GTK_ENTRY(client->password_entry), FALSE);
-    gtk_box_pack_start(GTK_BOX(hbox), client->password_entry, TRUE, TRUE, 0);
-    gtk_box_pack_start(GTK_BOX(auth_vbox), hbox, FALSE, FALSE, 0);
-    
-    gtk_container_add(GTK_CONTAINER(frame), auth_vbox);
-    gtk_box_pack_start(GTK_BOX(main_vbox), frame, FALSE, FALSE, 0);
     
     // 按钮区域
     hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
@@ -97,18 +66,18 @@ void create_main_window(OVPNClient *client) {
     gtk_widget_set_no_show_all(client->test_button, TRUE);
     gtk_box_pack_start(GTK_BOX(hbox), client->test_button, FALSE, FALSE, 0);
 
-    client->connect_button = gtk_button_new_with_label("Connect to VPN");
+    client->connect_button = gtk_button_new_with_label("连接VPN");
     g_signal_connect(client->connect_button, "clicked", G_CALLBACK(connect_vpn_clicked), client);
     gtk_widget_set_sensitive(client->connect_button, FALSE);
     gtk_box_pack_start(GTK_BOX(hbox), client->connect_button, FALSE, FALSE, 0);
     
-    client->disconnect_button = gtk_button_new_with_label("Disconnect VPN");
+    client->disconnect_button = gtk_button_new_with_label("断开VPN");
     g_signal_connect(client->disconnect_button, "clicked", G_CALLBACK(disconnect_vpn_clicked), client);
     gtk_widget_set_sensitive(client->disconnect_button, FALSE);
     gtk_box_pack_start(GTK_BOX(hbox), client->disconnect_button, FALSE, FALSE, 0);
 
     // 新增删除按钮
-    client->delete_button = gtk_button_new_with_label("Delete VPN Config");
+    client->delete_button = gtk_button_new_with_label("删除配置文件");
     g_signal_connect(client->delete_button, "clicked", G_CALLBACK(delete_vpn_clicked), client);
     gtk_widget_set_sensitive(client->delete_button, FALSE);
     gtk_box_pack_start(GTK_BOX(hbox), client->delete_button, FALSE, FALSE, 0);
@@ -116,34 +85,92 @@ void create_main_window(OVPNClient *client) {
     
     gtk_box_pack_start(GTK_BOX(main_vbox), hbox, FALSE, FALSE, 0);
     
+
+
     // 配置分析区域
-    frame = gtk_frame_new("OpenVPN Configuration Analysis");
+    client->config_analysis_frame = gtk_frame_new("配置文件解析");
     scrolled = gtk_scrolled_window_new(NULL, NULL);
-    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled), 
-                                 GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled),
+                                GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
     gtk_widget_set_size_request(scrolled, -1, 200);
-    
-    client->result_view = gtk_text_view_new();
-    gtk_text_view_set_editable(GTK_TEXT_VIEW(client->result_view), FALSE);
-    gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(client->result_view), GTK_WRAP_WORD_CHAR);
-    
-    // 设置默认文本
-    GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(client->result_view));
-    gtk_text_buffer_set_text(buffer, 
-        "Import an .ovpn file to see configuration analysis here.\n\n"
-        "This application provides:\n"
-        "• Real VPN connections through NetworkManager\n"
-        "• OpenVPN configuration parsing\n"
-        "• Connection testing and monitoring\n"
-        "• System tray integration\n\n"
-        "Log file: /tmp/ovpn_client.log", -1);
-    
-    gtk_container_add(GTK_CONTAINER(scrolled), client->result_view);
-    gtk_container_add(GTK_CONTAINER(frame), scrolled);
-    gtk_box_pack_start(GTK_BOX(main_vbox), frame, TRUE, TRUE, 0);
-    
+
+    client->result_view = GTK_TEXT_VIEW(gtk_text_view_new());
+    gtk_text_view_set_editable(client->result_view, FALSE);
+    gtk_text_view_set_wrap_mode(client->result_view, GTK_WRAP_WORD_CHAR);
+
+    gtk_container_add(GTK_CONTAINER(scrolled), GTK_WIDGET(client->result_view));
+    gtk_container_add(GTK_CONTAINER(client->config_analysis_frame), scrolled);
+    gtk_box_pack_start(GTK_BOX(main_vbox), client->config_analysis_frame, TRUE, TRUE, 0);
+
+
+    // 连接日志区域
+    client->connection_log_frame = gtk_frame_new("连接日志");
+    GtkWidget *log_scrolled = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(log_scrolled),
+                                GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+    gtk_widget_set_size_request(log_scrolled, -1, 200);
+
+    client->log_view = GTK_TEXT_VIEW(gtk_text_view_new());
+    gtk_text_view_set_editable(client->log_view, FALSE);
+    gtk_text_view_set_wrap_mode(client->log_view, GTK_WRAP_WORD_CHAR);
+
+    gtk_container_add(GTK_CONTAINER(log_scrolled), GTK_WIDGET(client->log_view));
+    gtk_container_add(GTK_CONTAINER(client->connection_log_frame), log_scrolled);
+    gtk_box_pack_start(GTK_BOX(main_vbox), client->connection_log_frame, TRUE, TRUE, 0);
+
+    gtk_widget_show_all(main_vbox);
+
     log_message("INFO", "Main window created successfully");
+    gtk_widget_hide(client->config_analysis_frame);
+    gtk_widget_hide(client->connection_log_frame);
+    log_message("INFO", "All frame hidden, window will be shown");
+
+    
 }
+
+
+// 配置分析区域内容更新
+void update_config_analysis_view(OVPNClient *client) {
+    if (!client || !client->parsed_config || !client->result_view) return;
+
+    OVPNConfig *conf = client->parsed_config;
+    char analysis[2048] = {0};
+    int offset = 0;
+
+    offset += snprintf(analysis + offset, sizeof(analysis) - offset, 
+        "【配置解析成功】\n\n");
+
+    // remote/server部分
+    for (int i = 0; i < conf->remote_count; i++) {
+        offset += snprintf(analysis + offset, sizeof(analysis) - offset,
+            "远程服务器 %d：\n"
+            "  服务器地址: %s\n"
+            "  端口: %s\n"
+            "  协议: %s\n", 
+            i+1, conf->remote[i].server, conf->remote[i].port, conf->remote[i].proto);
+    }
+
+    // 加密/证书部分
+    offset += snprintf(analysis + offset, sizeof(analysis) - offset,
+        "\n加密参数:\n"
+        "  Cipher: %s\n"
+        "  TLS最低版本: %s\n",
+        conf->cipher[0] ? conf->cipher : "(未指定)",
+        conf->tls_version_min[0] ? conf->tls_version_min : "(未指定)");
+
+    offset += snprintf(analysis + offset, sizeof(analysis) - offset,
+        "\n证书相关:\n"
+        "  CA证书: %s\n"
+        "  用户证书: %s\n"
+        "  私钥文件: %s\n",
+        conf->ca[0] ? conf->ca : "(未指定)",
+        conf->cert[0] ? conf->cert : "(未指定)",
+        conf->key[0] ? conf->key : "(未指定)");
+
+    GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(client->result_view));
+    gtk_text_buffer_set_text(buffer, analysis, -1);
+}
+
 
 // 创建系统托盘指示器 - 添加错误处理
 gboolean create_indicator(OVPNClient *client) {

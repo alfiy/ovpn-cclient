@@ -52,12 +52,14 @@ show_usage() {
     echo "  --check-deps        Check dependencies only"
     echo "  --install-deps      Install missing dependencies (Ubuntu/Debian)"
     echo "  --package           Create source package"
+    echo "  --deb               Create Debian deb package"
     echo ""
     echo "Examples:"
     echo "  $SCRIPT_NAME                    # Normal build"
     echo "  $SCRIPT_NAME --clean --debug    # Clean debug build"
     echo "  $SCRIPT_NAME --install --run    # Build, install and run"
     echo "  $SCRIPT_NAME --install-deps     # Install dependencies"
+    echo "  $SCRIPT_NAME --deb              # Create Debian deb package"
 }
 
 # Function to install dependencies
@@ -377,6 +379,67 @@ EOF
     return 0
 }
 
+# Function to create DEB package
+make_deb_package() {
+    log_info "开始生成 DEB 安装包..."
+
+    APPNAME="$PROJECT_NAME"
+    VERSION="1.0.0"   # 可根据实际自动生成版本号
+    ARCH="amd64"      # 可自动获取架构: ARCH=$(dpkg --print-architecture)
+    DEB_DIR="${PROJECT_NAME}_deb"
+    DEB_PKG="${APPNAME}_${VERSION}_${ARCH}.deb"
+
+    rm -rf "$DEB_DIR"
+    mkdir -p "$DEB_DIR/DEBIAN"
+    mkdir -p "$DEB_DIR/usr/local/bin"
+    mkdir -p "$DEB_DIR/usr/share/applications"
+    mkdir -p "$DEB_DIR/usr/share/pixmaps"
+
+    # 可执行文件
+    cp "$BUILD_DIR/$APPNAME" "$DEB_DIR/usr/local/bin/$APPNAME"
+    # .desktop 文件
+    cat > "$DEB_DIR/usr/share/applications/$APPNAME.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=OVPN Client
+Comment=OpenVPN GUI client with NetworkManager
+Exec=/usr/local/bin/ovpn-client
+Icon=icons8-openvpn-48.png
+Terminal=false
+Categories=Network;
+EOF
+    # 图标文件
+    if [ -f "icons8-openvpn-48.png" ]; then
+        cp "icons8-openvpn-48.png" "$DEB_DIR/usr/share/pixmaps/"
+    else
+        log_warning "icons8-openvpn-48.png 未找到，只打包可执行文件和desktop文件"
+    fi
+
+    # control 文件
+    cat > "$DEB_DIR/DEBIAN/control" <<EOF
+Package: $APPNAME
+Version: $VERSION
+Section: net
+Priority: optional
+Architecture: $ARCH
+Depends: libgtk-3-0, network-manager, libayatana-appindicator3-1, libuuid1, libglib2.0-0
+Maintainer: Your Name <your@email.com>
+Description: OVPN Client (GTK3 + NetworkManager)
+EOF
+
+    # 构建 deb 包
+    dpkg-deb --build "$DEB_DIR" "$DEB_PKG"
+    if [ $? -eq 0 ]; then
+        log_success "DEB安装包已生成: $DEB_PKG"
+        rm -rf "$DEB_DIR"
+        return 0
+    else
+        log_error "DEB包构建失败"
+        return 1
+    fi
+}
+
+
 # Function to run the application
 run_app() {
     local build_type="$1"
@@ -436,6 +499,7 @@ main() {
     local check_deps_only=false
     local install_deps_only=false
     local package_only=false
+    local make_deb_only=false
     
     # Initialize log file
     echo "Build started at $(date)" > "$LOG_FILE"
@@ -481,6 +545,10 @@ main() {
                 ;;
             --package)
                 package_only=true
+                shift
+                ;;
+            --deb|--make-deb)
+                make_deb_only=true
                 shift
                 ;;
             *)
@@ -563,6 +631,11 @@ main() {
         run_app "$build_type"
     fi
     
+    if [ "$make_deb_only" = true ]; then
+        make_deb_package
+        exit $?
+    fi
+
     log_success "Build script completed successfully"
     log_info "Log file: $LOG_FILE"
     
