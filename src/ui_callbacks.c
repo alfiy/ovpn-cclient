@@ -85,7 +85,7 @@ void delete_vpn_clicked(GtkWidget *widget, gpointer user_data) {
     if (ret == 0) {
         show_notification(client, "VPN connection deleted successfully!", FALSE);
         log_message("INFO", "VPN connection deleted: %s", connection_name);
-        scanned_connections_cb(NULL, NULL, client);
+        scan_existing_connections(client);
     } else {
         show_notification(client, "Failed to delete VPN connection.", TRUE);
     }
@@ -95,7 +95,9 @@ void delete_vpn_clicked(GtkWidget *widget, gpointer user_data) {
     client->openvpn_log_offset = 0;
     client->active_connection = NULL;
     client->selected_connection = NULL;
-    sync_active_connection(client);
+   
+    
+    refresh_connection_combo_box(client);
 }
 
 // 安全释放OVPN配置的函数
@@ -156,12 +158,16 @@ void file_chosen_cb(GtkWidget *dialog, gint response_id, gpointer user_data) {
                 char status_text[256];
                 char *basename = g_path_get_basename(filename);
                 if (basename) {
+                    g_free(client->last_imported_name);
+                    client->last_imported_name = g_strdup(basename);
+
                     snprintf(status_text, sizeof(status_text), "Imported: %s", basename);
                     if (client->status_label)
                         gtk_label_set_text(GTK_LABEL(client->status_label), status_text);
                     g_free(basename);
                 }
                 if (validate_certificates(client->parsed_config)) {
+                    // 系统导入vpn配置
                     char command[1024];
                     int ret;
                     snprintf(command, sizeof(command),
@@ -170,13 +176,14 @@ void file_chosen_cb(GtkWidget *dialog, gint response_id, gpointer user_data) {
                     if (ret == 0) {
                         show_notification(client, "VPN connection imported successfully!", FALSE);
                         log_message("INFO", "Imported VPN connection with file: %s, status=%d", filename, ret);
+                        // 导入成功后重新scan
+                        scan_existing_connections(client);
                     } else {
                         show_notification(client, "Failed to import VPN connection!", TRUE);
                         log_message("ERROR", "Failed to import VPN connection with file: %s, status=%d", filename, ret);
                     }
                     update_config_analysis_view(client);
-                    scanned_connections_cb(NULL, NULL, client);
-                    sync_active_connection(client);
+
                 } else {
                     show_notification(client, "Failed to validate certificate", TRUE);
                 }
@@ -187,6 +194,8 @@ void file_chosen_cb(GtkWidget *dialog, gint response_id, gpointer user_data) {
         }
     }
     if (dialog) gtk_widget_destroy(dialog);
+
+    refresh_connection_combo_box(client);
 }
 
 // 连接VPN按钮
@@ -256,6 +265,7 @@ void connect_vpn_clicked(GtkWidget *widget, gpointer user_data) {
 
 // 连接成功后同步（你的Activate nc后应回调这里）
 void vpn_connected_cb(NMClient *client, gpointer user_data) {
+    (void) client;
     OVPNClient *data = user_data;
     sync_active_connection(data);
 }
@@ -478,11 +488,51 @@ void test_connection_clicked(GtkWidget *widget, gpointer user_data) {
 
 // 封装：刷新下拉列表函数
 void refresh_connection_combo_box(OVPNClient *client) {
-    if (!client || !client->connection_combo_box || !client->existing_connections) return;
+   
+    if (!client || !client->connection_combo_box || !client->existing_connections) {
+        log_message("DEBUG", "refresh_connection_combo_box early return due to NULL");
+        return;
+    }
     GtkComboBoxText *combo = GTK_COMBO_BOX_TEXT(client->connection_combo_box);
     gtk_combo_box_text_remove_all(combo);
+
     for (guint i = 0; i < client->existing_connections->len; i++) {
         gtk_combo_box_text_append_text(combo, (char*)g_ptr_array_index(client->existing_connections, i));
+    }
+
+    log_message("DEBUG", "Number of existing connections: %u", client->existing_connections->len);
+
+    if (client->existing_connections->len == 0) {
+        
+        gtk_label_set_text(GTK_LABEL(client->status_label), "没有配置文件，请先导入配置文件。");
+        gtk_widget_show(client->status_label);
+
+        // 没有连接项，下拉框无选中，仅允许导入，断开按钮禁用
+        gtk_widget_set_sensitive(client->connect_button, FALSE);
+        gtk_widget_set_sensitive(client->disconnect_button, FALSE);
+        gtk_widget_set_sensitive(client->delete_button, FALSE);
+
+    } else {    
+        gtk_widget_hide(client->status_label);
+
+        // 有连接项时（未选中除外），此处连接/删除按钮可用；断开按钮状态由active_connection或其它回调控制
+        gtk_widget_set_sensitive(client->connect_button, TRUE);
+        // gtk_widget_set_sensitive(client->delete_button, TRUE);
+    }
+
+    // === 自动选中新项逻辑 ===
+    if (client->existing_connections->len > 0) {
+        int active_index = 0;
+        if (client->last_imported_name) {
+            for (guint i = 0; i < client->existing_connections->len; i++) {
+                char *name = (char*)g_ptr_array_index(client->existing_connections, i);
+                if (g_strcmp0(name, client->last_imported_name) == 0) {
+                    active_index = i;
+                    break;
+                }
+            }
+        }
+        gtk_combo_box_set_active(GTK_COMBO_BOX(combo), active_index);
     }
 }
 
@@ -568,6 +618,18 @@ void quit_menu_clicked(GtkWidget *widget, gpointer user_data) {
     }
     
     log_message("INFO", "Quit requested from menu");
+
+    // 主动断开VPN连接
+    // 注意：这里不能同步等待异步断开完成，只能通知用户"正在断开"就直接退出
+    if (client->active_connection && client->nm_client) {
+        log_message("INFO", "Active VPN detected, disconnecting before quit...");
+        nm_client_deactivate_connection_async(client->nm_client, client->active_connection, NULL, NULL, NULL);
+        // 你也可以显示通知
+        show_notification(client, "Disconnecting VPN before exiting...", FALSE);
+    }
+
+    // 日志流释放
+    vpn_log_cleanup(client);
     if (client->app) {
         g_application_quit(G_APPLICATION(client->app));
         // 日志流释放

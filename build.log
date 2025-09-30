@@ -1,9 +1,9 @@
-Build started at 2025年 09月 30日 星期二 12:28:31 CST
+Build started at 2025年 09月 30日 星期二 15:18:05 CST
 [0;34m[INFO][0m Starting ovpn-client build script
 [0;34m[INFO][0m Build configuration:
 [0;34m[INFO][0m   Clean first: false
 [0;34m[INFO][0m   Debug build: false
-[0;34m[INFO][0m   Install after: true
+[0;34m[INFO][0m   Install after: false
 [0;34m[INFO][0m   Run after: false
 [0;34m[INFO][0m   Test only: false
 [0;34m[INFO][0m Checking dependencies...
@@ -19,11 +19,6 @@ Build started at 2025年 09月 30日 星期二 12:28:31 CST
 [0;34m[INFO][0m Compiling source files...
 [0;34m[INFO][0m Linking objects...
 [0;32m[SUCCESS][0m Build completed successfully (build/ovpn-client)
-[0;34m[INFO][0m Installing application...
-[0;32m[SUCCESS][0m Installed to /usr/local/bin/ovpn-client
-[0;32m[SUCCESS][0m Copied icon to /usr/share/pixmaps/icons8-openvpn-48.png
-[0;34m[INFO][0m Generated ovpn-client.desktop
-[0;32m[SUCCESS][0m Desktop launcher installed: ovpn-client.desktop
 [0;32m[SUCCESS][0m Build script completed successfully
 [0;34m[INFO][0m Log file: build.log
 [0;34m[INFO][0m Next steps:

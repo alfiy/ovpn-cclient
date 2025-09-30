@@ -103,6 +103,7 @@ typedef struct {
     guint vpn_log_watch;
     guint openvpn_log_timer;
     gsize openvpn_log_offset;
+    char *last_imported_name;
 } OVPNClient;
 
 #endif

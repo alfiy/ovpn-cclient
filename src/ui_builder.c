@@ -42,7 +42,7 @@ void create_main_window(OVPNClient *client) {
 
 
     // 状态标签
-    client->status_label = gtk_label_new("No file imported yet.");
+    client->status_label = gtk_label_new("没有配置文件，请先导入配置文件。");
     gtk_widget_set_halign(client->status_label, GTK_ALIGN_START);
     gtk_box_pack_start(GTK_BOX(main_vbox), client->status_label, FALSE, FALSE, 0);
     

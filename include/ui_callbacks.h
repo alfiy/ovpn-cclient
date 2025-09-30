@@ -22,5 +22,6 @@ void append_log_to_view(OVPNClient *client, const char *log_line);
 gboolean pipe_log_callback(GIOChannel *source, GIOCondition cond, gpointer user_data);
 void start_vpn_and_log(OVPNClient *client, const char *connection_name);
 void vpn_log_cleanup(OVPNClient *client);
+void refresh_connection_combo_box(OVPNClient *client);
 
 #endif

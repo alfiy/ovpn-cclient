@@ -3,6 +3,7 @@
 #include "../include/nm_connection.h"
 #include "../include/log_util.h"
 #include "../include/notify.h"
+#include "../include/ui_callbacks.h"
 
 
 // 扫描所有已保存的连接的回调函数
@@ -10,6 +11,7 @@ void scanned_connections_cb(GObject *source_object, GAsyncResult *res, gpointer 
     (void)source_object;
     (void)res;
     OVPNClient *app = (OVPNClient *)user_data;
+    OVPNClient *client = (OVPNClient *)user_data;
 
     // 清空下拉列表
     gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(app->connection_combo_box));
@@ -59,6 +61,8 @@ void scanned_connections_cb(GObject *source_object, GAsyncResult *res, gpointer 
         gtk_widget_set_sensitive(app->connection_combo_box, FALSE);
         gtk_widget_set_sensitive(app->connect_button, FALSE);
     }
+
+    refresh_connection_combo_box(client);
 }
 
 void scan_existing_connections(OVPNClient *client) {
