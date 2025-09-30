@@ -10,7 +10,7 @@
 
 // 创建主窗口
 void create_main_window(OVPNClient *client) {
-    GtkWidget *main_vbox, *hbox, *frame, *scrolled, *button;
+    GtkWidget *main_vbox, *hbox, *scrolled, *button;
     
     log_message("INFO", "Creating main window...");
     

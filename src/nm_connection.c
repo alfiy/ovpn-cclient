@@ -137,7 +137,7 @@ void activate_vpn_connection(OVPNClient *client, const char *connection_name) {
     log_message("INFO", "Activating connection '%s'...", connection_name);
     
     // UI 状态更新
-    gtk_label_set_text(GTK_LABEL(client->connection_status_label), "VPN Status: Connecting...");
+    gtk_label_set_text(GTK_LABEL(client->connection_status_label), "VPN 状态: 正在连接...");
     gtk_widget_set_sensitive(client->connect_button, FALSE);
     gtk_widget_set_sensitive(client->disconnect_button, FALSE);
 
@@ -348,7 +348,7 @@ void vpn_activate_done(GObject *source_obj, GAsyncResult *res, gpointer user_dat
         g_error_free(error);
 
         // 恢复 UI 状态，让用户可以再次尝试
-        gtk_label_set_text(GTK_LABEL(client->connection_status_label), "VPN Status: Disconnected");
+        gtk_label_set_text(GTK_LABEL(client->connection_status_label), "VPN 状态: 已断开");
         gtk_widget_set_sensitive(client->connect_button, TRUE);
         gtk_widget_set_sensitive(client->disconnect_button, FALSE);
         return;

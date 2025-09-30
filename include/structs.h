@@ -97,6 +97,12 @@ typedef struct {
     GtkTextView *result_view; // 配置文件解析内容
     GtkTextView *log_view; // 连接日志内容
     GtkWidget *scrolled;
+
+    GPid vpn_log_pid;
+    GIOChannel *vpn_log_channel;
+    guint vpn_log_watch;
+    guint openvpn_log_timer;
+    gsize openvpn_log_offset;
 } OVPNClient;
 
 #endif
