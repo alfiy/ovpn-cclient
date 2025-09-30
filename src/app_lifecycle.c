@@ -10,6 +10,7 @@
 
 // 应用程序激活时调用的回调函数
 void app_activate(GtkApplication *app, gpointer user_data) {
+    log_message("DEBUG", "app_activate called");
     OVPNClient *client = (OVPNClient *)user_data;
     
     // 防止重复激活
@@ -28,6 +29,14 @@ void app_activate(GtkApplication *app, gpointer user_data) {
     
     log_message("INFO", "NetworkManager client initialized");
     
+    // ---- 加载CSS ----
+    GtkCssProvider *provider = gtk_css_provider_new();
+    gtk_css_provider_load_from_path(provider, "myapp.css", NULL);
+    gtk_style_context_add_provider_for_screen(
+        gdk_screen_get_default(),
+        GTK_STYLE_PROVIDER(provider),
+        GTK_STYLE_PROVIDER_PRIORITY_USER);
+
     // 创建主窗口
     create_main_window(client);
     

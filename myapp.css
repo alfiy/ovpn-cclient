@@ -1,0 +1,76 @@
+window {
+    background: #F5F7FA; /* 主窗口背景淡灰 */
+}
+
+frame {   /* 区块分割，如配置区、日志区 */
+    border-radius: 10px;
+    border: 2px solid #d9dadb;
+    background: #fff; /* 内容区白底 */
+    margin: 12px;
+    padding: 10px;
+}
+
+#connect_button, #disconnect_button {
+    font-weight: bold;
+    border-radius: 10px;
+    padding: 8px 24px;
+    min-height: 36px;
+    font-size: 14px;
+    transition: background 140ms;
+}
+#connect_button {
+    background: linear-gradient(90deg,#fd8504,#fdcc80);
+    color: #fff;
+}
+#connect_button:active {
+    background: #ee7f02;
+}
+#disconnect_button {
+    background: linear-gradient(90deg,#2a3b6e,#7996d9);
+    color: #fff;
+}
+#disconnect_button:active {
+    background: #224070;
+}
+
+#test_button, #import_button, #delete_button {
+    border-radius: 10px;
+    background: #eaeaea;
+    color: #333;
+    font-weight: bold;
+    min-height: 36px;
+    padding: 8px 20px;
+}
+GtkComboBox {
+    min-height: 30px;
+    font-size: 13px;
+    color: #222;
+    margin-bottom: 10px;
+    background: #eef4ff;
+    border-radius: 8px;
+}
+GtkLabel.status-label {
+    font-size: 16px;
+    margin-bottom: 8px;
+    font-weight: bold;
+    color: #fd8504;
+}
+GtkLabel.notify-label {
+    color: #0b97d6;
+    font-size: 13pt;
+    padding: 4px 10px;
+    border-radius: 7px;
+    background: #e9f7ff;
+    margin: 6px 0;
+}
+GtkLabel.status-error {
+    color: #e74c3c;
+    background: #ffeaea;
+}
+GtkTextView {
+    background: #f7faff;
+    border-radius: 7px;
+}
+GtkSpinner {
+    margin-left: 6px;
+}

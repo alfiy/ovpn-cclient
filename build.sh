@@ -431,6 +431,10 @@ EOF
     dpkg-deb --build "$DEB_DIR" "$DEB_PKG"
     if [ $? -eq 0 ]; then
         log_success "DEB安装包已生成: $DEB_PKG"
+        echo "  推荐安装方式："
+        echo "    sudo apt install ./$DEB_PKG"
+        echo "  如果用 dpkg -i 安装遇到依赖失败，再运行："
+        echo "    sudo apt-get install -f"
         rm -rf "$DEB_DIR"
         return 0
     else
