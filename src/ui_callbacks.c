@@ -271,9 +271,9 @@ void file_chosen_cb(GtkWidget *dialog, gint response_id, gpointer user_data) {
                             pclose(fp);
                             char set_def_cmd[512];
                             snprintf(set_def_cmd, sizeof(set_def_cmd), "nmcli connection modify \"%s\" ipv4.never-default yes", vpn_name);
-                            system(set_def_cmd);
-                            system("nmcli connection reload");
-                            log_message("INFO", "Set never-default by nmcli for connection: %s", vpn_name);
+                            int rc1 = system(set_def_cmd);
+                            int rc2 = system("nmcli connection reload");
+                            log_message("INFO", "Set never-default by nmcli for connection: %s", rc1, rc2, vpn_name);
                         }
                         scan_existing_connections(client);
 

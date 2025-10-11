@@ -1,9 +1,9 @@
-Build started at 2025年 10月 11日 星期六 16:57:19 CST
+Build started at 2025年 10月 11日 星期六 17:10:56 CST
 [0;34m[INFO][0m Starting ovpn-client build script
 [0;34m[INFO][0m Build configuration:
 [0;34m[INFO][0m   Clean first: false
 [0;34m[INFO][0m   Debug build: false
-[0;34m[INFO][0m   Install after: true
+[0;34m[INFO][0m   Install after: false
 [0;34m[INFO][0m   Run after: false
 [0;34m[INFO][0m   Test only: false
 [0;34m[INFO][0m Checking dependencies...
@@ -19,19 +19,5 @@ Build started at 2025年 10月 11日 星期六 16:57:19 CST
 [0;34m[INFO][0m Compiling source files...
 [0;34m[INFO][0m Linking objects...
 [0;32m[SUCCESS][0m Build completed successfully (build/ovpn-client)
-[0;34m[INFO][0m Installing application...
-[0;32m[SUCCESS][0m Installed to /usr/local/bin/ovpn-client
-[0;32m[SUCCESS][0m Copied icon to /usr/share/pixmaps/icons8-openvpn-48.png
-[0;34m[INFO][0m Generated ovpn-client.desktop
-[0;32m[SUCCESS][0m Desktop launcher installed: ovpn-client.desktop
-[0;32m[SUCCESS][0m Build script completed successfully
-[0;34m[INFO][0m Log file: build.log
-[0;34m[INFO][0m Next steps:
-[0;34m[INFO][0m   Run the application: ./ovpn-client
-[0;34m[INFO][0m   Install system-wide: ./build.sh --install
-[0;34m[INFO][0m   Clean build files: ./build.sh --clean
-[0;34m[INFO][0m   View help: ./build.sh --help
-[0;34m[INFO][0m GUI Troubleshooting:
-[0;34m[INFO][0m   Check display: echo $DISPLAY
-[0;34m[INFO][0m   Run in debug mode: ./build.sh --debug --run
-[0;34m[INFO][0m   Check log file: /tmp/ovpn_client.log
+[0;34m[INFO][0m 开始生成 DEB 安装包...
+[0;32m[SUCCESS][0m DEB安装包已生成: ovpn-client_1.0.0_amd64.deb
