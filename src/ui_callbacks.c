@@ -118,6 +118,85 @@ static void safe_free_ovpn_config(OVPNConfig *config) {
 
 
 // 导入文件回调
+// void file_chosen_cb(GtkWidget *dialog, gint response_id, gpointer user_data) {
+//     OVPNClient *client = (OVPNClient *)user_data;
+//     if (!client) {
+//         log_message("ERROR", "Invalid client in file_chosen_cb");
+//         if (dialog) gtk_widget_destroy(dialog);
+//         return;
+//     }
+//     // 清理log状态
+//     if (client->openvpn_log_timer) {
+//         g_source_remove(client->openvpn_log_timer); client->openvpn_log_timer = 0;
+//     }
+//     client->openvpn_log_offset = 0;
+//     client->active_connection = NULL;
+//     client->selected_connection = NULL;
+//     sync_active_connection(client);
+
+//     if (response_id == GTK_RESPONSE_ACCEPT) {
+//         char *filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+//         if (filename) {
+//             if (strlen(filename) < sizeof(client->ovpn_file_path)) {
+//                 g_strlcpy(client->ovpn_file_path, filename, sizeof(client->ovpn_file_path));
+//             } else {
+//                 log_message("ERROR", "Filename too long: %s", filename);
+//                 show_notification(client, "Filename is too long", TRUE);
+//                 g_free(filename);
+//                 gtk_widget_destroy(dialog);
+//                 return;
+//             }
+//             if (client->parsed_config) {
+//                 safe_free_ovpn_config(client->parsed_config);
+//                 client->parsed_config = NULL;
+//             }
+//             client->parsed_config = parse_ovpn_file(filename);
+//             if (client->config_analysis_frame) gtk_widget_show(client->config_analysis_frame);
+//             if (client->connection_log_frame) gtk_widget_hide(client->connection_log_frame);
+
+//             if (client->parsed_config) {
+//                 char status_text[256];
+//                 char *basename = g_path_get_basename(filename);
+//                 if (basename) {
+//                     g_free(client->last_imported_name);
+//                     client->last_imported_name = g_strdup(basename);
+
+//                     snprintf(status_text, sizeof(status_text), "Imported: %s", basename);
+//                     if (client->status_label)
+//                         gtk_label_set_text(GTK_LABEL(client->status_label), status_text);
+//                     g_free(basename);
+//                 }
+//                 if (validate_certificates(client->parsed_config)) {
+//                     // 系统导入vpn配置
+//                     char command[1024];
+//                     int ret;
+//                     snprintf(command, sizeof(command),
+//                         "nmcli connection import type openvpn file '%s'", filename);
+//                     ret = system(command);
+//                     if (ret == 0) {
+//                         show_notification(client, "VPN connection imported successfully!", FALSE);
+//                         log_message("INFO", "Imported VPN connection with file: %s, status=%d", filename, ret);
+//                         // 导入成功后重新scan
+//                         scan_existing_connections(client);
+//                     } else {
+//                         show_notification(client, "Failed to import VPN connection!", TRUE);
+//                         log_message("ERROR", "Failed to import VPN connection with file: %s, status=%d", filename, ret);
+//                     }
+//                     update_config_analysis_view(client);
+
+//                 } else {
+//                     show_notification(client, "Failed to validate certificate", TRUE);
+//                 }
+//             } else {
+//                 show_notification(client, "Failed to parse OVPN file", TRUE);
+//             }
+//             g_free(filename);
+//         }
+//     }
+//     if (dialog) gtk_widget_destroy(dialog);
+
+//     refresh_connection_combo_box(client);
+// }
 void file_chosen_cb(GtkWidget *dialog, gint response_id, gpointer user_data) {
     OVPNClient *client = (OVPNClient *)user_data;
     if (!client) {
@@ -125,7 +204,6 @@ void file_chosen_cb(GtkWidget *dialog, gint response_id, gpointer user_data) {
         if (dialog) gtk_widget_destroy(dialog);
         return;
     }
-    // 清理log状态
     if (client->openvpn_log_timer) {
         g_source_remove(client->openvpn_log_timer); client->openvpn_log_timer = 0;
     }
@@ -151,39 +229,59 @@ void file_chosen_cb(GtkWidget *dialog, gint response_id, gpointer user_data) {
                 client->parsed_config = NULL;
             }
             client->parsed_config = parse_ovpn_file(filename);
+
             if (client->config_analysis_frame) gtk_widget_show(client->config_analysis_frame);
             if (client->connection_log_frame) gtk_widget_hide(client->connection_log_frame);
 
             if (client->parsed_config) {
                 char status_text[256];
                 char *basename = g_path_get_basename(filename);
+                char imported_name[256] = {0};
                 if (basename) {
                     g_free(client->last_imported_name);
                     client->last_imported_name = g_strdup(basename);
-
                     snprintf(status_text, sizeof(status_text), "Imported: %s", basename);
                     if (client->status_label)
                         gtk_label_set_text(GTK_LABEL(client->status_label), status_text);
+                    char *dot = strrchr(basename, '.');
+                    if (dot) *dot = '\0';
+                    strncpy(imported_name, basename, sizeof(imported_name)-1);
                     g_free(basename);
                 }
                 if (validate_certificates(client->parsed_config)) {
-                    // 系统导入vpn配置
+                    // 使用 nmcli 系统导入
                     char command[1024];
                     int ret;
                     snprintf(command, sizeof(command),
-                        "nmcli connection import type openvpn file '%s'", filename);
+                             "nmcli connection import type openvpn file '%s'", filename);
                     ret = system(command);
+
                     if (ret == 0) {
                         show_notification(client, "VPN connection imported successfully!", FALSE);
                         log_message("INFO", "Imported VPN connection with file: %s, status=%d", filename, ret);
-                        // 导入成功后重新scan
                         scan_existing_connections(client);
+                        // 等待确保配置文件写盘
+                        g_usleep(200 * 1000); // 200ms
+
+                        // 直接用nmcli修改分流属性
+                        FILE *fp = popen("nmcli -t -f NAME,TYPE connection show | grep ':vpn' | tail -n 1 | cut -d':' -f1", "r");
+                        char vpn_name[128] = {0};
+                        if (fp && fgets(vpn_name, sizeof(vpn_name), fp)) {
+                            vpn_name[strcspn(vpn_name, "\r\n")] = 0;
+                            pclose(fp);
+                            char set_def_cmd[512];
+                            snprintf(set_def_cmd, sizeof(set_def_cmd), "nmcli connection modify \"%s\" ipv4.never-default yes", vpn_name);
+                            system(set_def_cmd);
+                            system("nmcli connection reload");
+                            log_message("INFO", "Set never-default by nmcli for connection: %s", vpn_name);
+                        }
+                        scan_existing_connections(client);
+
                     } else {
                         show_notification(client, "Failed to import VPN connection!", TRUE);
                         log_message("ERROR", "Failed to import VPN connection with file: %s, status=%d", filename, ret);
                     }
                     update_config_analysis_view(client);
-
                 } else {
                     show_notification(client, "Failed to validate certificate", TRUE);
                 }
@@ -197,6 +295,8 @@ void file_chosen_cb(GtkWidget *dialog, gint response_id, gpointer user_data) {
 
     refresh_connection_combo_box(client);
 }
+
+
 
 // 连接VPN按钮
 void connect_vpn_clicked(GtkWidget *widget, gpointer user_data) {

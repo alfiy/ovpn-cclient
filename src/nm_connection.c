@@ -4,6 +4,8 @@
 #include "../include/log_util.h"
 #include "../include/notify.h"
 #include "../include/ui_callbacks.h"
+#include <libnm/nm-setting-ip4-config.h>
+
 
 
 // 扫描所有已保存的连接的回调函数
@@ -165,7 +167,8 @@ NMConnection* create_nm_vpn_connection(OVPNClient *client, const char *name, OVP
     NMConnection *connection;
     NMSettingConnection *s_con;
     NMSettingVpn *s_vpn;
-    NMSettingIPConfig *s_ip4, *s_ip6;
+    NMSettingIP4Config *s_ip4;
+    NMSettingIPConfig *s_ip6;
     uuid_t uuid;
     char uuid_str[37];
     char ovpn_dir[MAX_PATH];
@@ -322,8 +325,23 @@ NMConnection* create_nm_vpn_connection(OVPNClient *client, const char *name, OVP
     nm_connection_add_setting(connection, NM_SETTING(s_vpn));
     
     // IP设置
-    s_ip4 = (NMSettingIPConfig *) nm_setting_ip4_config_new();
-    g_object_set(s_ip4, NM_SETTING_IP_CONFIG_METHOD, NM_SETTING_IP4_CONFIG_METHOD_AUTO, NULL);
+    s_ip4 = (NMSettingIP4Config *) nm_setting_ip4_config_new();
+    g_object_set(
+        s_ip4, 
+        "method","auto",
+        "never-default", TRUE,   // 关键属性 分流
+        NULL);
+
+    gboolean ndv = FALSE;
+    g_object_get(s_ip4, "never-default", &ndv, NULL);
+    log_message("DEBUG", "never-default is: %d", ndv);
+    
+    GValue value = G_VALUE_INIT;
+    g_value_init(&value, G_TYPE_BOOLEAN);
+    g_object_get_property(G_OBJECT(s_ip4), "never-default", &value);
+    gboolean never_default_set = g_value_get_boolean(&value);
+    log_message("DEBUG", "never-default set: %d", never_default_set);
+    
     nm_connection_add_setting(connection, NM_SETTING(s_ip4));
     
     s_ip6 = (NMSettingIPConfig *) nm_setting_ip6_config_new();
