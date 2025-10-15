@@ -166,6 +166,29 @@ The application creates a log file at `/tmp/ovpn_importer.log` for debugging pur
    - Check log file: `/tmp/ovpn_importer.log`
    - Run in debug mode: `make run-debug`
 
+
+## 交叉编译
+1. 安装交叉编译工具链
+
+```bash
+cd scripts
+sudo ./install_toolchain.sh
+
+```
+2. 编译
+
+```bash
+export CROSS_COMPILE=aarch64-linux-gnu-
+export SYSROOT=/opt/arm64-rootfs
+export PKG_CONFIG_SYSROOT_DIR=$SYSROOT
+export PKG_CONFIG_PATH=$SYSROOT/usr/lib/aarch64-linux-gnu/pkgconfig:$SYSROOT/usr/share/pkgconfig
+
+./build.sh
+```
+
+
 ## License
 
 This project is provided as-is for educational and demonstration purposes.
+
+
