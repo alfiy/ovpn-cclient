@@ -37,6 +37,35 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1" | tee -a "$LOG_FILE"
 }
 
+# ===============================
+# 🧩 新增：交叉编译配置区
+# ===============================
+detect_cross_compile() {
+    # 默认编译器
+    CC=${CC:-gcc}
+    CXX=${CXX:-g++}
+
+    # 如果定义了 CROSS_COMPILE，则自动替换编译器
+    if [ -n "$CROSS_COMPILE" ]; then
+        export CC="${CROSS_COMPILE}gcc"
+        export CXX="${CROSS_COMPILE}g++"
+        log_info "Cross compile mode enabled: CC=$CC"
+    else
+        log_info "Using native compiler: CC=$CC"
+    fi
+
+    # 如果定义了 SYSROOT，则设置 pkg-config 环境
+    if [ -n "$SYSROOT" ]; then
+        export PKG_CONFIG_SYSROOT_DIR="$SYSROOT"
+        export PKG_CONFIG_PATH="$SYSROOT/usr/lib/pkgconfig:$SYSROOT/usr/share/pkgconfig"
+        log_info "Using SYSROOT=$SYSROOT"
+    fi
+
+    # 输出当前架构
+    TARGET_ARCH=$($CC -dumpmachine 2>/dev/null || echo "unknown")
+    log_info "Target architecture: $TARGET_ARCH"
+}
+
 # Function to show usage
 show_usage() {
     echo "Usage: $SCRIPT_NAME [OPTIONS]"
@@ -214,6 +243,7 @@ clean_build() {
 build_project() {
     local build_type="$1"
     log_info "Starting build process..."
+    detect_cross_compile   # ✅ 新增：在构建前检测交叉编译环境
 
     # === 检查源码目录是否存在 ===
     if [ ! -d "$SRC_DIR" ]; then
@@ -228,7 +258,7 @@ build_project() {
         return 1
     fi
 
-    # === 获取编译参数 ===
+    # 使用交叉编译时的 pkg-config（支持 SYSROOT）
     local gtk_cflags=$(pkg-config --cflags gtk+-3.0 2>/dev/null)
     local gtk_libs=$(pkg-config --libs gtk+-3.0 2>/dev/null)
     local nm_cflags=$(pkg-config --cflags libnm 2>/dev/null)
@@ -258,12 +288,12 @@ build_project() {
     for src in "${src_files[@]}"; do
         obj="$BUILD_DIR/$(basename "${src%.c}.o")"
         if [ "$build_type" = "debug" ]; then
-            gcc -Wall -Wextra -std=c99 -g -DDEBUG $all_cflags -c "$src" -o "$obj" || {
+            $CC -Wall -Wextra -std=c99 -g -DDEBUG $all_cflags -c "$src" -o "$obj" || {
                 log_error "Compilation failed: $src"
                 return 1
             }
         else
-            gcc -Wall -Wextra -std=c99 -O2 $all_cflags -c "$src" -o "$obj" || {
+            $CC -Wall -Wextra -std=c99 -O2 $all_cflags -c "$src" -o "$obj" || {
                 log_error "Compilation failed: $src"
                 return 1
             }
@@ -276,7 +306,7 @@ build_project() {
     [ "$build_type" = "debug" ] && target="$BUILD_DIR/${PROJECT_NAME}-debug"
 
     log_info "Linking objects..."
-    if gcc "${objs[@]}" -o "$target" $all_libs; then
+    if $CC "${objs[@]}" -o "$target" $all_libs; then
         log_success "Build completed successfully ($target)"
     else
         log_error "Linking failed"
@@ -385,7 +415,7 @@ make_deb_package() {
 
     APPNAME="$PROJECT_NAME"
     VERSION="1.0.0"   # 可根据实际自动生成版本号
-    ARCH="amd64"      # 可自动获取架构: ARCH=$(dpkg --print-architecture)
+    ARCH=$(dpkg --print-architecture 2>/dev/null || $CC -dumpmachine | cut -d'-' -f1)      # 可自动获取架构: ARCH=$(dpkg --print-architecture)
     DEB_DIR="${PROJECT_NAME}_deb"
     DEB_PKG="${APPNAME}_${VERSION}_${ARCH}.deb"
 
@@ -423,7 +453,7 @@ Section: net
 Priority: optional
 Architecture: $ARCH
 Depends: libgtk-3-0, network-manager, libayatana-appindicator3-1, libuuid1, libglib2.0-0
-Maintainer: Your Name <your@email.com>
+Maintainer: Your Name <13012648@qq.com>
 Description: OVPN Client (GTK3 + NetworkManager)
 EOF
 
