@@ -16,6 +16,10 @@ typedef struct _NMClient NMClient;
 typedef struct _NMConnection NMConnection;
 typedef struct _NMActiveConnection NMActiveConnection;
 
+// 前向声明路由管理器
+typedef struct RouteManager RouteManager;
+// 前向声明 V2Ray 管理器 - 使用不透明指针
+typedef struct V2RayManager_opaque V2RayManager;
 
 typedef struct {
     char server[128];
@@ -104,6 +108,12 @@ typedef struct {
     guint openvpn_log_timer;
     gsize openvpn_log_offset;
     char *last_imported_name;
+    
+    // 路由管理器
+    RouteManager *route_manager;
+    
+    // V2Ray 管理器
+    V2RayManager *v2ray_manager;
 } OVPNClient;
 
 #endif

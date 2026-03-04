@@ -1,34 +1,71 @@
-Build started at 2025年 10月 15日 星期三 15:48:05 CST
+Build started at 2025年 12月 31日 星期三 16:35:28 CST
 [0;34m[INFO][0m Starting ovpn-client build script
 [0;34m[INFO][0m Build configuration:
 [0;34m[INFO][0m   Clean first: false
 [0;34m[INFO][0m   Debug build: false
 [0;34m[INFO][0m   Install after: false
 [0;34m[INFO][0m   Run after: false
-[0;34m[INFO][0m   Test only: false
 [0;34m[INFO][0m Checking dependencies...
 [0;32m[SUCCESS][0m GCC compiler found: gcc (Ubuntu 11.4.0-1ubuntu1~22.04.2) 11.4.0
 [0;32m[SUCCESS][0m pkg-config found
 [0;32m[SUCCESS][0m GTK3 found: version 3.24.33
 [0;32m[SUCCESS][0m NetworkManager found: version 1.36.6
 [0;32m[SUCCESS][0m Ayatana AppIndicator found: version 0.5.90
-[0;32m[SUCCESS][0m UUID library found
 [0;32m[SUCCESS][0m GLib found: version 2.72.4
+[0;32m[SUCCESS][0m json-c found: version 0.15
 [0;32m[SUCCESS][0m All dependencies satisfied
 [0;34m[INFO][0m Starting build process...
 [0;34m[INFO][0m Using native compiler: CC=gcc
 [0;34m[INFO][0m Target architecture: x86_64-linux-gnu
 [0;34m[INFO][0m Compiling source files...
+[0;34m[INFO][0m Compiling main.c...
+[0;34m[INFO][0m Compiling app_lifecycle.c...
+[0;34m[INFO][0m Compiling message.c...
+[0;34m[INFO][0m Compiling ui_builder.c...
+[0;34m[INFO][0m Compiling route_manager.c...
+[0;34m[INFO][0m Compiling proxy_parser.c...
+src/proxy_parser.c: In function ‘parse_vless’:
+src/proxy_parser.c:187:63: warning: operand of ‘?:’ changes signedness from ‘long int’ to ‘size_t’ {aka ‘long unsigned int’} due to unsignedness of other operand [-Wsign-compare]
+  187 |             char *params_str = g_strndup(question + 1, hash ? hash - question - 1 : strlen(question + 1));
+      |                                                               ^~~~~~~~~~~~~~~~~~~
+[0;34m[INFO][0m Compiling route_ui.c...
+src/route_ui.c: In function ‘on_add_rule_clicked’:
+src/route_ui.c:28:44: warning: unused parameter ‘button’ [-Wunused-parameter]
+   28 | static void on_add_rule_clicked(GtkButton *button, gpointer user_data) {
+      |                                 ~~~~~~~~~~~^~~~~~
+src/route_ui.c: In function ‘on_remove_rule_clicked’:
+src/route_ui.c:94:47: warning: unused parameter ‘button’ [-Wunused-parameter]
+   94 | static void on_remove_rule_clicked(GtkButton *button, gpointer user_data) {
+      |                                    ~~~~~~~~~~~^~~~~~
+src/route_ui.c: In function ‘on_export_rules_clicked’:
+src/route_ui.c:126:48: warning: unused parameter ‘button’ [-Wunused-parameter]
+  126 | static void on_export_rules_clicked(GtkButton *button, gpointer user_data) {
+      |                                     ~~~~~~~~~~~^~~~~~
+src/route_ui.c: In function ‘on_geoip_browse_clicked’:
+src/route_ui.c:150:48: warning: unused parameter ‘button’ [-Wunused-parameter]
+  150 | static void on_geoip_browse_clicked(GtkButton *button, gpointer user_data) {
+      |                                     ~~~~~~~~~~~^~~~~~
+[0;34m[INFO][0m Compiling ui_utils.c...
+[0;34m[INFO][0m Compiling v2ray_ui.c...
+[0;34m[INFO][0m Compiling v2ray_manager.c...
+src/v2ray_manager.c: In function ‘v2ray_manager_stop’:
+src/v2ray_manager.c:216:13: warning: implicit declaration of function ‘usleep’; did you mean ‘sleep’? [-Wimplicit-function-declaration]
+  216 |             usleep(100000); // 100ms
+      |             ^~~~~~
+      |             sleep
+[0;34m[INFO][0m Compiling log_util.c...
+[0;34m[INFO][0m Compiling parser.c...
+[0;34m[INFO][0m Compiling core_logic.c...
+[0;34m[INFO][0m Compiling ui_callbacks.c...
+[0;34m[INFO][0m Compiling nm_connection.c...
+[0;34m[INFO][0m Compiling notify.c...
 [0;34m[INFO][0m Linking objects...
-[0;32m[SUCCESS][0m Build completed successfully (build/ovpn-client)
+[0;32m[SUCCESS][0m Build completed successfully: build/ovpn-client
 [0;32m[SUCCESS][0m Build script completed successfully
 [0;34m[INFO][0m Log file: build.log
 [0;34m[INFO][0m Next steps:
-[0;34m[INFO][0m   Run the application: ./ovpn-client
+[0;34m[INFO][0m   Run the application: ./build/ovpn-client
 [0;34m[INFO][0m   Install system-wide: ./build.sh --install
 [0;34m[INFO][0m   Clean build files: ./build.sh --clean
+[0;34m[INFO][0m   Create DEB package: ./build.sh --deb
 [0;34m[INFO][0m   View help: ./build.sh --help
-[0;34m[INFO][0m GUI Troubleshooting:
-[0;34m[INFO][0m   Check display: echo $DISPLAY
-[0;34m[INFO][0m   Run in debug mode: ./build.sh --debug --run
-[0;34m[INFO][0m   Check log file: /tmp/ovpn_client.log

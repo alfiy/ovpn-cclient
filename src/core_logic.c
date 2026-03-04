@@ -10,6 +10,7 @@
 #include "../include/log_util.h"
 #include "../include/structs.h"
 #include "../include/ui_callbacks.h"
+#include "../include/v2ray_manager.h"
 
 
 // 验证证书文件
@@ -147,4 +148,25 @@ void scan_nm_connections(OVPNClient *client) {
     g_ptr_array_unref((GPtrArray *)connections);
 
     log_message("INFO", "Finished scanning. Found %d VPN connection(s).", client->existing_connections->len);
+}
+
+/**
+ * 初始化 V2Ray 管理器
+ */
+void init_v2ray_manager(OVPNClient *client) {
+    if (!client->v2ray_manager) {
+        client->v2ray_manager = v2ray_manager_new();
+        log_message("INFO", "V2Ray manager initialized");
+    }
+}
+
+/**
+ * 清理 V2Ray 管理器
+ */
+void cleanup_v2ray_manager(OVPNClient *client) {
+    if (client->v2ray_manager) {
+        v2ray_manager_free(client->v2ray_manager);
+        client->v2ray_manager = NULL;
+        log_message("INFO", "V2Ray manager cleaned up");
+    }
 }

@@ -29,6 +29,9 @@ void app_activate(GtkApplication *app, gpointer user_data) {
     
     log_message("INFO", "NetworkManager client initialized");
     
+    // 初始化 V2Ray 管理器
+    init_v2ray_manager(client);
+    
     // ---- 加载CSS ----
     GtkCssProvider *provider = gtk_css_provider_new();
     gtk_css_provider_load_from_path(provider, "myapp.css", NULL);
@@ -77,6 +80,9 @@ void app_shutdown(GtkApplication *app, gpointer user_data) {
     log_message("INFO", "Application shutting down...");
     
     client->is_running = FALSE;
+    
+    // 清理 V2Ray 管理器
+    cleanup_v2ray_manager(client);
     
     // 清理资源
     if (client->parsed_config) {

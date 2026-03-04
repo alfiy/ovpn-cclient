@@ -18,12 +18,14 @@ NM_CFLAGS = $(shell pkg-config --cflags libnm)
 NM_LIBS = $(shell pkg-config --libs libnm)
 INDICATOR_CFLAGS = $(shell pkg-config --cflags ayatana-appindicator3-0.1)
 INDICATOR_LIBS = $(shell pkg-config --libs ayatana-appindicator3-0.1)
+JSON_CFLAGS = $(shell pkg-config --cflags json-c)
+JSON_LIBS = $(shell pkg-config --libs json-c)
 EXTRA_LIBS = -luuid -lm
 
-ALL_CFLAGS = $(CFLAGS) $(GTK_CFLAGS) $(NM_CFLAGS) $(INDICATOR_CFLAGS) -MMD -MP -I$(SRC_DIR)
-ALL_LIBS = $(GTK_LIBS) $(NM_LIBS) $(INDICATOR_LIBS) $(EXTRA_LIBS)
+ALL_CFLAGS = $(CFLAGS) $(GTK_CFLAGS) $(NM_CFLAGS) $(INDICATOR_CFLAGS) $(JSON_CFLAGS) -MMD -MP -I$(SRC_DIR)
+ALL_LIBS = $(GTK_LIBS) $(NM_LIBS) $(INDICATOR_LIBS) $(JSON_LIBS) $(EXTRA_LIBS)
 
-DEBUG_ALL_CFLAGS = $(DEBUG_CFLAGS) $(GTK_CFLAGS) $(NM_CFLAGS) $(INDICATOR_CFLAGS) -MMD -MP -I$(SRC_DIR)
+DEBUG_ALL_CFLAGS = $(DEBUG_CFLAGS) $(GTK_CFLAGS) $(NM_CFLAGS) $(INDICATOR_CFLAGS) $(JSON_CFLAGS) -MMD -MP -I$(SRC_DIR)
 
 TARGET = $(BUILD_DIR)/$(PROJECT_NAME)
 TARGET_DEBUG = $(BUILD_DIR)/$(PROJECT_NAME)-debug
@@ -74,6 +76,7 @@ check-deps:
 	@pkg-config --exists glib-2.0 && echo "✓ GLib found" || echo "✗ GLib not found"
 	@pkg-config --exists libnm && echo "✓ NetworkManager found" || echo "✗ NetworkManager not found"
 	@pkg-config --exists ayatana-appindicator3-0.1 && echo "✓ AppIndicator found" || echo "✗ AppIndicator not found"
+	@pkg-config --exists json-c && echo "✓ JSON-C found" || echo "✗ JSON-C not found"
 	@which gcc >/dev/null 2>&1 && echo "✓ GCC found" || echo "✗ GCC not found"
 	@echo "Checking additional libraries..."
 	@ldconfig -p | grep -q libuuid && echo "✓ UUID library found" || echo "✗ UUID library not found"
@@ -90,6 +93,8 @@ info:
 	@echo "NetworkManager LIBS: $(NM_LIBS)"
 	@echo "AppIndicator CFLAGS: $(INDICATOR_CFLAGS)"
 	@echo "AppIndicator LIBS: $(INDICATOR_LIBS)"
+	@echo "JSON-C CFLAGS: $(JSON_CFLAGS)"
+	@echo "JSON-C LIBS: $(JSON_LIBS)"
 	@echo "========================="
 
 run: $(TARGET)

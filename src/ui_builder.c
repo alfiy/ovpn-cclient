@@ -5,6 +5,8 @@
 #include "../include/structs.h"
 #include "../include/ui_callbacks.h"
 #include "../include/config.h"
+#include "../include/v2ray_ui.h"
+#include "../include/route_ui.h"
 
 
 
@@ -85,6 +87,24 @@ void create_main_window(OVPNClient *client) {
     
     gtk_box_pack_start(GTK_BOX(main_vbox), hbox, FALSE, FALSE, 0);
     
+    // 新增功能按钮区域（路由配置和 V2Ray 配置）
+    GtkWidget *feature_hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+    
+    // 路由配置按钮
+    GtkWidget *route_button = gtk_button_new_with_label("路由配置");
+    g_signal_connect_swapped(route_button, "clicked", 
+                            G_CALLBACK(route_ui_show_config_dialog), 
+                            client);
+    gtk_box_pack_start(GTK_BOX(feature_hbox), route_button, FALSE, FALSE, 0);
+    
+    // V2Ray 配置按钮
+    GtkWidget *v2ray_button = gtk_button_new_with_label("V2Ray 配置");
+    g_signal_connect_swapped(v2ray_button, "clicked",
+                            G_CALLBACK(v2ray_ui_show_config_dialog),
+                            client);
+    gtk_box_pack_start(GTK_BOX(feature_hbox), v2ray_button, FALSE, FALSE, 0);
+    
+    gtk_box_pack_start(GTK_BOX(main_vbox), feature_hbox, FALSE, FALSE, 0);
 
 
     // 配置分析区域

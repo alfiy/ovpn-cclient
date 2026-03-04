@@ -4,12 +4,13 @@
 # Author: Generated for C GTK3 OpenVPN Client with NetworkManager integration
 # Usage: ./build.sh [options]
 
-set -e  # Exit on any error
+set -euo pipefail
 
 # Script configuration
 SCRIPT_NAME="build.sh"
 PROJECT_NAME="ovpn-client"
 SRC_DIR="src"
+INC_DIR="include"
 BUILD_DIR="build"
 LOG_FILE="build.log"
 
@@ -45,8 +46,8 @@ detect_cross_compile() {
     CC=${CC:-gcc}
     CXX=${CXX:-g++}
 
-    # 如果定义了 CROSS_COMPILE，则自动替换编译器
-    if [ -n "$CROSS_COMPILE" ]; then
+    # 如果定义了 CROSS_COMPILE，则自动替换编译器,如果未定义，就用空字符串
+    if [ -n "${CROSS_COMPILE:-}"  ]; then
         export CC="${CROSS_COMPILE}gcc"
         export CXX="${CROSS_COMPILE}g++"
         log_info "Cross compile mode enabled: CC=$CC"
@@ -54,8 +55,8 @@ detect_cross_compile() {
         log_info "Using native compiler: CC=$CC"
     fi
 
-    # 如果定义了 SYSROOT，则设置 pkg-config 环境
-    if [ -n "$SYSROOT" ]; then
+    # 如果定义了 SYSROOT，则设置 pkg-config 环境，如果未定义，就用空字符串
+    if [ -n "${SYSROOT:-}" ]; then
         export PKG_CONFIG_SYSROOT_DIR="$SYSROOT"
         export PKG_CONFIG_PATH="$SYSROOT/usr/lib/pkgconfig:$SYSROOT/usr/share/pkgconfig"
         log_info "Using SYSROOT=$SYSROOT"
@@ -105,7 +106,8 @@ install_dependencies() {
             libnm-dev \
             libayatana-appindicator3-dev \
             uuid-dev \
-            libglib2.0-dev
+            libglib2.0-dev \
+            libjson-c-dev
         log_success "Dependencies installed successfully"
     elif command -v dnf >/dev/null 2>&1; then
         log_info "Detected Fedora/RHEL system"
@@ -116,7 +118,8 @@ install_dependencies() {
             NetworkManager-libnm-devel \
             libayatana-appindicator3-devel \
             libuuid-devel \
-            glib2-devel
+            glib2-devel \
+            json-c-devel
         log_success "Dependencies installed successfully"
     elif command -v pacman >/dev/null 2>&1; then
         log_info "Detected Arch Linux system"
@@ -127,7 +130,8 @@ install_dependencies() {
             networkmanager \
             libayatana-appindicator \
             util-linux \
-            glib2
+            glib2 \
+            json-c
         log_success "Dependencies installed successfully"
     else
         log_error "Unsupported package manager. Please install dependencies manually."
@@ -135,105 +139,88 @@ install_dependencies() {
     fi
 }
 
-# Function to check dependencies
+# Function to check dependencies (non-strict)
 check_dependencies() {
     log_info "Checking dependencies..."
     
-    local missing_deps=0
+    local warnings=0
     
     # Check for required tools
     if ! command -v gcc >/dev/null 2>&1; then
         log_error "GCC compiler not found"
-        log_info "Install with: sudo apt-get install build-essential (Ubuntu/Debian)"
-        log_info "            or: sudo dnf install gcc (Fedora/RHEL)"
-        log_info "            or: sudo pacman -S gcc (Arch Linux)"
-        missing_deps=$((missing_deps + 1))
+        return 1
     else
         log_success "GCC compiler found: $(gcc --version | head -n1)"
     fi
     
     if ! command -v pkg-config >/dev/null 2>&1; then
-        log_error "pkg-config not found"
-        log_info "Install with: sudo apt-get install pkg-config (Ubuntu/Debian)"
-        log_info "            or: sudo dnf install pkgconfig (Fedora/RHEL)"
-        log_info "            or: sudo pacman -S pkgconf (Arch Linux)"
-        missing_deps=$((missing_deps + 1))
+        log_warning "pkg-config not found, will try to build anyway"
+        warnings=$((warnings + 1))
     else
         log_success "pkg-config found"
     fi
     
-    # Check for GTK3
-    if ! pkg-config --exists gtk+-3.0 2>/dev/null; then
-        log_error "GTK3 development libraries not found"
-        log_info "Install with: sudo apt-get install libgtk-3-dev (Ubuntu/Debian)"
-        log_info "            or: sudo dnf install gtk3-devel (Fedora/RHEL)"
-        log_info "            or: sudo pacman -S gtk3 (Arch Linux)"
-        missing_deps=$((missing_deps + 1))
-    else
+    # Check for GTK3 (non-fatal)
+    if pkg-config --exists gtk+-3.0 2>/dev/null; then
         local gtk_version=$(pkg-config --modversion gtk+-3.0 2>/dev/null)
         log_success "GTK3 found: version $gtk_version"
+    else
+        log_warning "GTK3 development libraries not found, will try to build anyway"
+        warnings=$((warnings + 1))
     fi
     
-    # Check for NetworkManager library
-    if ! pkg-config --exists libnm 2>/dev/null; then
-        log_error "NetworkManager development libraries not found"
-        log_info "Install with: sudo apt-get install libnm-dev (Ubuntu/Debian)"
-        log_info "            or: sudo dnf install NetworkManager-libnm-devel (Fedora/RHEL)"
-        log_info "            or: sudo pacman -S networkmanager (Arch Linux)"
-        missing_deps=$((missing_deps + 1))
-    else
+    # Check for NetworkManager library (non-fatal)
+    if pkg-config --exists libnm 2>/dev/null; then
         local nm_version=$(pkg-config --modversion libnm 2>/dev/null)
         log_success "NetworkManager found: version $nm_version"
+    else
+        log_warning "NetworkManager development libraries not found, will try to build anyway"
+        warnings=$((warnings + 1))
     fi
     
-    # Check for AppIndicator library
-    if ! pkg-config --exists ayatana-appindicator3-0.1 2>/dev/null; then
-        log_error "Ayatana AppIndicator development libraries not found"
-        log_info "Install with: sudo apt-get install libayatana-appindicator3-dev (Ubuntu/Debian)"
-        log_info "            or: sudo dnf install libayatana-appindicator3-devel (Fedora/RHEL)"
-        log_info "            or: sudo pacman -S libayatana-appindicator (Arch Linux)"
-        missing_deps=$((missing_deps + 1))
-    else
+    # Check for AppIndicator library (non-fatal)
+    if pkg-config --exists ayatana-appindicator3-0.1 2>/dev/null; then
         local indicator_version=$(pkg-config --modversion ayatana-appindicator3-0.1 2>/dev/null)
         log_success "Ayatana AppIndicator found: version $indicator_version"
+    else
+        log_warning "Ayatana AppIndicator development libraries not found, will try to build anyway"
+        warnings=$((warnings + 1))
     fi
     
-    # Check for UUID library
-    if ! ldconfig -p 2>/dev/null | grep -q libuuid; then
-        log_error "UUID development libraries not found"
-        log_info "Install with: sudo apt-get install uuid-dev (Ubuntu/Debian)"
-        log_info "            or: sudo dnf install libuuid-devel (Fedora/RHEL)"
-        log_info "            or: sudo pacman -S util-linux (Arch Linux)"
-        missing_deps=$((missing_deps + 1))
-    else
-        log_success "UUID library found"
-    fi
-    
-    # Check for GLib
-    if ! pkg-config --exists glib-2.0 2>/dev/null; then
-        log_error "GLib development libraries not found"
-        log_info "Usually included with GTK3 development packages"
-        missing_deps=$((missing_deps + 1))
-    else
+    # Check for GLib (non-fatal)
+    if pkg-config --exists glib-2.0 2>/dev/null; then
         local glib_version=$(pkg-config --modversion glib-2.0 2>/dev/null)
         log_success "GLib found: version $glib_version"
+    else
+        log_warning "GLib development libraries not found, will try to build anyway"
+        warnings=$((warnings + 1))
     fi
-    
-    if [ $missing_deps -gt 0 ]; then
-        log_error "$missing_deps dependencies missing"
-        log_info "Run './build.sh --install-deps' to install dependencies automatically"
-        return 1
+
+    # Check for json-c
+    if ! pkg-config --exists json-c 2>/dev/null; then
+        log_error "json-c development libraries not found"
+        log_info "Install with: sudo apt-get install libjson-c-dev (Ubuntu/Debian)"
+        log_info "            or: sudo dnf install json-c-devel (Fedora/RHEL)"
+        log_info "            or: sudo pacman -S json-c (Arch Linux)"
+        missing_deps=$((missing_deps + 1))
+    else
+        local jsonc_version=$(pkg-config --modversion json-c 2>/dev/null)
+        log_success "json-c found: version $jsonc_version"
+    fi
+
+    if [ $warnings -gt 0 ]; then
+        log_warning "$warnings dependencies have warnings, but will continue build"
+        log_info "If build fails, run './build.sh --install-deps' to install dependencies"
     else
         log_success "All dependencies satisfied"
-        return 0
     fi
+    
+    return 0
 }
 
 # Function to clean build artifacts
 clean_build() {
     log_info "Cleaning build artifacts..."
-    rm -f "$PROJECT_NAME" "${PROJECT_NAME}-debug" 2>/dev/null || true
-    rm -f *.o 2>/dev/null || true
     rm -rf "$BUILD_DIR" 2>/dev/null || true
     rm -f /tmp/ovpn_client.log 2>/dev/null || true
     log_success "Clean completed"
@@ -243,7 +230,7 @@ clean_build() {
 build_project() {
     local build_type="$1"
     log_info "Starting build process..."
-    detect_cross_compile   # ✅ 新增：在构建前检测交叉编译环境
+    detect_cross_compile
 
     # === 检查源码目录是否存在 ===
     if [ ! -d "$SRC_DIR" ]; then
@@ -252,53 +239,72 @@ build_project() {
     fi
 
     mkdir -p "$BUILD_DIR"
-    local src_files=($SRC_DIR/*.c)
+    local src_files=($(find "$SRC_DIR" -name "*.c"))
     if [ "${#src_files[@]}" -eq 0 ]; then
         log_error "No source files found in $SRC_DIR"
         return 1
     fi
 
-    # 使用交叉编译时的 pkg-config（支持 SYSROOT）
+    # 使用 pkg-config 获取编译标志
     local gtk_cflags=$(pkg-config --cflags gtk+-3.0 2>/dev/null)
     local gtk_libs=$(pkg-config --libs gtk+-3.0 2>/dev/null)
     local nm_cflags=$(pkg-config --cflags libnm 2>/dev/null)
     local nm_libs=$(pkg-config --libs libnm 2>/dev/null)
     local indicator_cflags=$(pkg-config --cflags ayatana-appindicator3-0.1 2>/dev/null)
     local indicator_libs=$(pkg-config --libs ayatana-appindicator3-0.1 2>/dev/null)
+    local jsonc_cflags=$(pkg-config --cflags json-c 2>/dev/null)
+    local jsonc_libs=$(pkg-config --libs json-c 2>/dev/null)
 
     # === 严格依赖检查 ===
     if [ -z "$gtk_cflags" ] || [ -z "$gtk_libs" ]; then
         log_error "Failed to get GTK3 compiler flags"
+        log_info "Run: ./build.sh --check-deps"
         return 1
     fi
     if [ -z "$nm_cflags" ] || [ -z "$nm_libs" ]; then
         log_error "Failed to get NetworkManager compiler flags"
+        log_info "Run: ./build.sh --check-deps"
         return 1
     fi
     if [ -z "$indicator_cflags" ] || [ -z "$indicator_libs" ]; then
         log_error "Failed to get AppIndicator compiler flags"
+        log_info "Run: ./build.sh --check-deps"
+        return 1
+    fi
+    if [ -z "$jsonc_cflags" ] || [ -z "$jsonc_libs" ]; then
+        log_error "Failed to get json-c compiler flags"
+        log_info "Install with: sudo apt-get install libjson-c-dev"
         return 1
     fi
 
-    local all_cflags="$gtk_cflags $nm_cflags $indicator_cflags -I$SRC_DIR"
-    local all_libs="$gtk_libs $nm_libs $indicator_libs -luuid -lm"
+    local all_cflags="$gtk_cflags $nm_cflags $indicator_cflags $jsonc_cflags -I$SRC_DIR -Iinclude"
+    local all_libs="$gtk_libs $nm_libs $indicator_libs $jsonc_libs -luuid -lm"
 
     # === 编译阶段 ===
     log_info "Compiling source files..."
+    local failed=0
     for src in "${src_files[@]}"; do
         obj="$BUILD_DIR/$(basename "${src%.c}.o")"
+        log_info "Compiling $(basename "$src")..."
+        
         if [ "$build_type" = "debug" ]; then
-            $CC -Wall -Wextra -std=c99 -g -DDEBUG $all_cflags -c "$src" -o "$obj" || {
+            if ! $CC -Wall -Wextra -std=c99 -g -DDEBUG $all_cflags -c "$src" -o "$obj" 2>&1 | tee -a "$LOG_FILE"; then
                 log_error "Compilation failed: $src"
-                return 1
-            }
+                failed=1
+                break
+            fi
         else
-            $CC -Wall -Wextra -std=c99 -O2 $all_cflags -c "$src" -o "$obj" || {
+            if ! $CC -Wall -Wextra -std=c99 -O2 $all_cflags -c "$src" -o "$obj" 2>&1 | tee -a "$LOG_FILE"; then
                 log_error "Compilation failed: $src"
-                return 1
-            }
+                failed=1
+                break
+            fi
         fi
     done
+
+    if [ $failed -eq 1 ]; then
+        return 1
+    fi
 
     # === 链接阶段 ===
     local objs=($BUILD_DIR/*.o)
@@ -306,46 +312,21 @@ build_project() {
     [ "$build_type" = "debug" ] && target="$BUILD_DIR/${PROJECT_NAME}-debug"
 
     log_info "Linking objects..."
-    if $CC "${objs[@]}" -o "$target" $all_libs; then
-        log_success "Build completed successfully ($target)"
-    else
+
+    set +e
+    $CC "${objs[@]}" -o "$target" $all_libs 2>&1 | tee -a "$LOG_FILE"
+    link_status=${PIPESTATUS[0]}
+    set -e
+
+    if [ $link_status -ne 0 ]; then
         log_error "Linking failed"
+        log_info "Check build.log for details"
         return 1
     fi
 
+    log_success "Build completed successfully: $target"
     return 0
-}
 
-
-# Function to test compilation
-test_compilation() {
-    log_info "Testing compilation..."
-    
-    # Check if source file exists
-    if [ ! -f "$SRC_DIR" ]; then
-        log_error "Source file '$SRC_DIR' not found"
-        return 1
-    fi
-    
-    # Get all required flags
-    local all_cflags=$(pkg-config --cflags gtk+-3.0 libnm ayatana-appindicator3-0.1 2>/dev/null)
-    
-    if [ -z "$all_cflags" ]; then
-        log_error "Failed to get required compiler flags"
-        return 1
-    fi
-    
-    local cmd="gcc -Wall -Wextra -std=c99 -O2 $all_cflags -c $SRC_DIR -o test.o"
-    log_info "Test command: $cmd"
-    
-    if eval $cmd; then
-        log_success "Compilation test passed"
-        rm -f test.o
-        return 0
-    else
-        log_error "Compilation test failed"
-        return 1
-    fi
 }
 
 # Function to install the application
@@ -376,7 +357,7 @@ install_app() {
         if sudo cp "$icon_file" "$icon_target"; then
             log_success "Copied icon to $icon_target"
         else
-            log_error "Failed to copy icon to $icon_target"
+            log_warning "Failed to copy icon to $icon_target"
         fi
     else
         log_warning "$icon_file not found in project root, skipping icon installation"
@@ -400,7 +381,7 @@ EOF
         sudo update-desktop-database /usr/share/applications/ 2>/dev/null || true
         log_success "Desktop launcher installed: $desktop_file"
     else
-        log_error "Failed to install desktop file."
+        log_warning "Failed to install desktop file."
     fi
 
     # 可选：清理当前目录生成的 desktop 文件
@@ -414,8 +395,8 @@ make_deb_package() {
     log_info "开始生成 DEB 安装包..."
 
     APPNAME="$PROJECT_NAME"
-    VERSION="1.0.0"   # 可根据实际自动生成版本号
-    ARCH=$(dpkg --print-architecture 2>/dev/null || $CC -dumpmachine | cut -d'-' -f1)      # 可自动获取架构: ARCH=$(dpkg --print-architecture)
+    VERSION="1.0.0"
+    ARCH=$(dpkg --print-architecture 2>/dev/null || $CC -dumpmachine | cut -d'-' -f1)
     DEB_DIR="${PROJECT_NAME}_deb"
     DEB_PKG="${APPNAME}_${VERSION}_${ARCH}.deb"
 
@@ -426,7 +407,13 @@ make_deb_package() {
     mkdir -p "$DEB_DIR/usr/share/pixmaps"
 
     # 可执行文件
+    if [ ! -f "$BUILD_DIR/$APPNAME" ]; then
+        log_error "Executable not found. Build first."
+        return 1
+    fi
+    
     cp "$BUILD_DIR/$APPNAME" "$DEB_DIR/usr/local/bin/$APPNAME"
+    
     # .desktop 文件
     cat > "$DEB_DIR/usr/share/applications/$APPNAME.desktop" <<EOF
 [Desktop Entry]
@@ -438,6 +425,7 @@ Icon=icons8-openvpn-48.png
 Terminal=false
 Categories=Network;
 EOF
+    
     # 图标文件
     if [ -f "icons8-openvpn-48.png" ]; then
         cp "icons8-openvpn-48.png" "$DEB_DIR/usr/share/pixmaps/"
@@ -458,8 +446,7 @@ Description: OVPN Client (GTK3 + NetworkManager)
 EOF
 
     # 构建 deb 包
-    dpkg-deb --build "$DEB_DIR" "$DEB_PKG"
-    if [ $? -eq 0 ]; then
+    if dpkg-deb --build "$DEB_DIR" "$DEB_PKG" 2>&1 | tee -a "$LOG_FILE"; then
         log_success "DEB安装包已生成: $DEB_PKG"
         echo "  推荐安装方式："
         echo "    sudo apt install ./$DEB_PKG"
@@ -472,7 +459,6 @@ EOF
         return 1
     fi
 }
-
 
 # Function to run the application
 run_app() {
@@ -503,12 +489,11 @@ run_app() {
     "$target"
 }
 
-
 # Function to create package
 create_package() {
     log_info "Creating source package..."
     
-    local files="$SRC_DIR Makefile build.sh"
+    local files="$SRC_DIR $INC_DIR Makefile build.sh"
     if [ -f "README.md" ]; then
         files="$files README.md"
     fi
@@ -604,7 +589,6 @@ main() {
     log_info "  Debug build: $debug_build"
     log_info "  Install after: $install_after"
     log_info "  Run after: $run_after"
-    log_info "  Test only: $test_only"
     
     # Install dependencies if requested
     if [ "$install_deps_only" = true ]; then
@@ -612,9 +596,9 @@ main() {
         exit $?
     fi
     
-    # Check dependencies first
+    # Check dependencies (non-strict)
     if ! check_dependencies; then
-        log_error "Dependency check failed"
+        log_error "Critical dependency check failed"
         exit 1
     fi
     
@@ -632,13 +616,12 @@ main() {
     # Clean if requested
     if [ "$clean_first" = true ]; then
         clean_build
-        exit 0
-    fi
-    
-    # Test compilation only if requested
-    if [ "$test_only" = true ]; then
-        test_compilation
-        exit $?
+
+        # ✅ 如果仅清理，不继续构建
+        if [ "$run_after" = false ] && [ "$install_after" = false ]; then
+            log_info "Clean only requested, exiting."
+            exit 0
+        fi
     fi
     
     # Build the project
@@ -650,6 +633,12 @@ main() {
     if ! build_project "$build_type"; then
         log_error "Build failed"
         exit 1
+    fi
+    
+    # Create DEB package if requested
+    if [ "$make_deb_only" = true ]; then
+        make_deb_package
+        exit $?
     fi
     
     # Install if requested
@@ -664,11 +653,6 @@ main() {
     if [ "$run_after" = true ]; then
         run_app "$build_type"
     fi
-    
-    if [ "$make_deb_only" = true ]; then
-        make_deb_package
-        exit $?
-    fi
 
     log_success "Build script completed successfully"
     log_info "Log file: $LOG_FILE"
@@ -676,15 +660,11 @@ main() {
     # Show next steps
     echo ""
     log_info "Next steps:"
-    log_info "  Run the application: ./$PROJECT_NAME"
+    log_info "  Run the application: ./$BUILD_DIR/$PROJECT_NAME"
     log_info "  Install system-wide: ./build.sh --install"
     log_info "  Clean build files: ./build.sh --clean"
+    log_info "  Create DEB package: ./build.sh --deb"
     log_info "  View help: ./build.sh --help"
-    echo ""
-    log_info "GUI Troubleshooting:"
-    log_info "  Check display: echo \$DISPLAY"
-    log_info "  Run in debug mode: ./build.sh --debug --run"
-    log_info "  Check log file: /tmp/ovpn_client.log"
 }
 
 # Run main function with all arguments
